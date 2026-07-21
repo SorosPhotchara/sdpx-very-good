@@ -21,12 +21,33 @@ This repository contains a Vite + React + TypeScript starter for the PairEval pr
 
 ## Run locally
 
+### Frontend
+
 ```bash
+git clone <repo-url>
+cd sdpx-very-good
 bun install
 bun run dev
 ```
 
-Open `http://localhost:5173` to view the current landing page.
+Open `http://localhost:5173` to view the frontend.
+
+### Backend
+
+```bash
+cd backend
+py -m pip install -r requirements.txt
+bun run dev
+```
+
+If `bun run dev` fails, use:
+
+```bash
+cd backend
+py -m uvicorn app.main:app --reload
+```
+
+Open `http://localhost:8000` to verify the backend.
 
 ## Note
 
