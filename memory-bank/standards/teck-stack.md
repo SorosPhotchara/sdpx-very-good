@@ -3,25 +3,25 @@
 ## Decision Summary
 ทีม: เก่งมากครับ
 Domain: [ชื่อ domain]**
-Date: [วันที่]
+Date: 21-7-2026
 
 ## Frontend
-- Framework: [Next.js / React]
+- Framework: React
 - Language: TypeScript
 - Styling: Tailwind CSS
-- Rationale: [ทำไมถึงเลือก]**
+- Rationale: 
 
 ## Backend
-- Framework: [Next.js API Routes / FastAPI]
-- Language: [TypeScript / Python]
-- Rationale: [ทำไมถึงเลือก]
+- Framework: FastAPI
+- Language: Python
+- Rationale: คุ้นเคยกับ python
 
 ## Database
-- [PostgreSQL / SQLite / TBD]
-- Rationale: [ทำไมถึงเลือก]
+- SQLite
+- Rationale: เก็บในไฟล์เดียว ไม่ต้องติดตั้ง แค่ Import
 
 ## Deployment
-- Platform: [Vercel / Render]
+- Platform: Vercel
 - Staging URL: [จะเพิ่มหลัง deploy]
 
 ## AI Tools
