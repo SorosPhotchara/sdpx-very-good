@@ -1,0 +1,696 @@
+openapi: 3.1.0
+
+info:
+  title: PairEval API
+  version: 0.1.0
+  description: |
+    Pairwise-comparison marking for university group work.
+
+    Every path here traces back to a user story in `docs/backlog.md`; the
+    `x-story` extension on each operation names it. Nothing was added because
+    it seemed useful — an endpoint no story asks for is scope creep with a
+    URL.
+
+    Requirement IDs (`FR-…`, `§…`) refer to `pairwise_evaluation_prd.md`.
+  license:
+    name: UNLICENSED
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://paireval-staging.example.com
+    description: Staging (not deployed yet)
+
+tags:
+  - name: Classrooms
+    description: Classroom and roster management (§7.2)
+  - name: Assignments
+    description: Assignment lifecycle and pairing (§7.3, §7.4)
+  - name: Evaluation
+    description: What a student actually does (§7.5)
+  - name: Reports
+    description: Instructor views (§7.7)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/classrooms:
+    post:
+      tags: [Classrooms]
+      summary: Create a classroom
+      operationId: createClassroom
+      x-story: US-01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassroomCreate'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              description: URL of the new classroom
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Classroom'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: A classroom with that slug already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+    get:
+      tags: [Classrooms]
+      summary: List classrooms the caller belongs to
+      operationId: listClassrooms
+      x-story: US-01
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Classroom'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/classrooms/{classroomId}/roster:import:
+    post:
+      tags: [Classrooms]
+      summary: Import a roster from CSV, atomically
+      operationId: importRoster
+      x-story: US-02
+      description: |
+        All-or-nothing (FR-CLASS-02). If any row fails validation the response
+        is 422 listing every problem row, and nothing is written — a
+        half-imported roster silently pairs a class that is missing people.
+      parameters:
+        - $ref: '#/components/parameters/ClassroomId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'UTF-8 CSV: email, group_name, student_id?, display_name?'
+                dryRun:
+                  type: boolean
+                  default: false
+                  description: Validate and report without writing (FR-CLASS-05)
+      responses:
+        '200':
+          description: Imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RosterImportResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: Rejected — nothing was written
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RosterImportResult'
+
+  /api/assignments/{assignmentId}/feasibility:
+    get:
+      tags: [Assignments]
+      summary: Preview coverage and workload before publishing
+      operationId: getFeasibility
+      x-story: US-04
+      description: |
+        Solves §8.2 without writing anything. If the target coverage cannot be
+        met, the response carries the reduced figure and the reason in numbers
+        (FR-PAIR-05).
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Feasibility'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: No feasible coverage exists for this classroom
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/assignments/{assignmentId}:publish:
+    post:
+      tags: [Assignments]
+      summary: Generate and freeze every pair
+      operationId: publishAssignment
+      x-story: US-04
+      description: |
+        Pairs are computed once and stored (FR-PAIR-01). They are never
+        re-rolled per request, or two students would answer different
+        questions about the same assignment.
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                acknowledgeReducedCoverage:
+                  type: boolean
+                  default: false
+                  description: Required when feasibility reports a reduction
+      responses:
+        '200':
+          description: Published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishResult'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Assignment is not in DRAFT status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Criteria weights do not total 100%, or pairing is infeasible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/assignments/{assignmentId}/my-evaluations:
+    get:
+      tags: [Evaluation]
+      summary: The comparisons assigned to the calling user
+      operationId: listMyEvaluations
+      x-story: US-05
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+        - name: side
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Side'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationPage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/comparisons/{pairAssignmentId}:
+    put:
+      tags: [Evaluation]
+      summary: Autosave one answer
+      operationId: saveComparison
+      x-story: US-06
+      description: |
+        Idempotent (FR-API-01): the same body sent twice leaves the same state,
+        because autosave fires on every keystroke-sized change and the network
+        is allowed to retry.
+      parameters:
+        - name: pairAssignmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComparisonInput'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonSaved'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: This pair belongs to a different evaluator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The deadline has passed (FR-EVAL-08)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /api/assignments/{assignmentId}/submissions:
+    post:
+      tags: [Evaluation]
+      summary: Submit one side of an evaluation
+      operationId: submitEvaluation
+      x-story: US-07
+      description: |
+        Re-submitting before the deadline is allowed without limit; the latest
+        submission is scored and every version is kept (FR-EVAL-06).
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Guards against a double-tapped submit button (FR-API-02)
+          schema:
+            type: string
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [side]
+              properties:
+                side:
+                  $ref: '#/components/schemas/Side'
+      responses:
+        '201':
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The deadline has passed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/assignments/{assignmentId}/my-score:
+    get:
+      tags: [Evaluation]
+      summary: The calling student's own score
+      operationId: getMyScore
+      x-story: US-08
+      description: |
+        Withheld until at least `k_min` evaluators have submitted (FR-ANON-02),
+        and never accompanied by a history or a delta — seeing a score move
+        after one classmate submits identifies that classmate (FR-ANON-03).
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyScore'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/assignments/{assignmentId}/reports/coverage:
+    get:
+      tags: [Reports]
+      summary: Coverage per pair, with low-confidence flags
+      operationId: getCoverageReport
+      x-story: US-09
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageReport'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Google OIDC id_token exchanged for a session token (FR-AUTH-01)
+
+  parameters:
+    ClassroomId:
+      name: classroomId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    AssignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Not signed in, or the session expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Signed in, but the role does not allow this (§3)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: |
+        Not found — also returned when the resource exists in a classroom the
+        caller does not belong to, so the response does not leak its existence
+        (FR-AUTHZ-02).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unprocessable:
+      description: Well-formed but semantically invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooManyRequests:
+      description: Rate limited (FR-API-04)
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable code, separate from the prose (FR-API-03)
+              examples: [DEADLINE_PASSED, ROSTER_ROW_INVALID, PAIRING_INFEASIBLE]
+            message:
+              type: string
+            field:
+              type: [string, 'null']
+            requestId:
+              type: string
+
+    Side:
+      type: string
+      enum: [GROUP, INDIVIDUAL]
+
+    ClassroomCreate:
+      type: object
+      required: [name, timezone]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        timezone:
+          type: string
+          examples: [Asia/Bangkok]
+        allowedEmailDomains:
+          type: array
+          items:
+            type: string
+          description: Empty must fail closed, not admit every domain (FR-AUTH-02)
+
+    Classroom:
+      type: object
+      required: [id, name, slug, timezone, status]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        slug: { type: string }
+        timezone: { type: string }
+        status:
+          type: string
+          enum: [ACTIVE, ARCHIVED]
+
+    RosterIssue:
+      type: object
+      required: [kind, message]
+      properties:
+        line:
+          type: [integer, 'null']
+          description: 1-based file line, counting the header
+        kind:
+          type: string
+          enum: [malformed_email, duplicate_email, empty_group, undersized_group]
+        message: { type: string }
+
+    RosterImportResult:
+      type: object
+      required: [imported, errors, warnings]
+      properties:
+        imported:
+          type: integer
+          description: Always 0 when `errors` is non-empty (FR-CLASS-02)
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/RosterIssue'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/RosterIssue'
+
+    Feasibility:
+      type: object
+      required: [coverage, workload, totalComparisons, reduced, reason]
+      properties:
+        coverage:
+          type: integer
+          minimum: 1
+          description: Comparisons each pair will actually receive
+        workload:
+          type: integer
+          minimum: 0
+          description: Pairs each student receives per criterion
+        totalComparisons: { type: integer }
+        possiblePairs: { type: integer }
+        reduced:
+          type: boolean
+          description: True when the target could not be met
+        reason:
+          type: string
+          description: Always states the figures, never just "coverage was lowered"
+
+    PublishResult:
+      type: object
+      required: [pairsCreated, feasibility, warnings]
+      properties:
+        pairsCreated: { type: integer }
+        feasibility:
+          $ref: '#/components/schemas/Feasibility'
+        warnings:
+          type: array
+          items: { type: string }
+        individualPlans:
+          type: array
+          items:
+            type: object
+            required: [groupId, enabled, coverage]
+            properties:
+              groupId: { type: integer, format: int64 }
+              enabled:
+                type: boolean
+                description: False for groups of 2 or fewer (FR-PAIR-12)
+              coverage: { type: integer }
+              lowConfidence:
+                type: boolean
+                description: Always true for groups of 3 (FR-PAIR-13)
+              note: { type: string }
+
+    PairToJudge:
+      type: object
+      required: [pairAssignmentId, criterionId, side, leftItem, rightItem]
+      properties:
+        pairAssignmentId: { type: integer, format: int64 }
+        criterionId: { type: integer, format: int64 }
+        side:
+          $ref: '#/components/schemas/Side'
+        leftItem:
+          $ref: '#/components/schemas/EvaluationItem'
+        rightItem:
+          $ref: '#/components/schemas/EvaluationItem'
+        choice:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 6
+        status:
+          type: string
+          enum: [DRAFT, SUBMITTED, EXCLUDED]
+
+    EvaluationItem:
+      type: object
+      required: [id, label]
+      properties:
+        id: { type: integer, format: int64 }
+        label: { type: string }
+        artifactUrl:
+          type: [string, 'null']
+          description: What the evaluator is meant to look at (A5/FR-EVAL-02)
+
+    EvaluationPage:
+      type: object
+      required: [assignmentId, side, pairs, answered, total]
+      properties:
+        assignmentId: { type: integer, format: int64 }
+        side:
+          $ref: '#/components/schemas/Side'
+        deadlineUtc: { type: string, format: date-time }
+        readOnly:
+          type: boolean
+          description: True after the deadline (FR-EVAL-08)
+        answered: { type: integer }
+        total: { type: integer }
+        pairs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PairToJudge'
+
+    ComparisonInput:
+      type: object
+      required: [choice]
+      properties:
+        choice:
+          type: integer
+          minimum: 1
+          maximum: 6
+          description: 6-point forced choice, no neutral option (D1/§9.1)
+        timeOnTaskMs:
+          type: integer
+          minimum: 0
+          description: Feeds the speed-run quality signal (QS-05)
+
+    ComparisonSaved:
+      type: object
+      required: [pairAssignmentId, choice, status, savedAt]
+      properties:
+        pairAssignmentId: { type: integer, format: int64 }
+        choice: { type: integer, minimum: 1, maximum: 6 }
+        status:
+          type: string
+          enum: [DRAFT, SUBMITTED]
+        savedAt: { type: string, format: date-time }
+
+    SubmissionReceipt:
+      type: object
+      required: [assignmentId, side, submittedAt, revisionNo, answered, total]
+      properties:
+        assignmentId: { type: integer, format: int64 }
+        side:
+          $ref: '#/components/schemas/Side'
+        submittedAt: { type: string, format: date-time }
+        revisionNo:
+          type: integer
+          description: Increments on every re-submit (FR-EVAL-06)
+        answered: { type: integer }
+        total:
+          type: integer
+          description: Submitting an incomplete set is allowed (FR-EVAL-05)
+
+    MyScore:
+      type: object
+      required: [assignmentId, available, isFinal]
+      properties:
+        assignmentId: { type: integer, format: int64 }
+        available:
+          type: boolean
+          description: False until the k-anonymity threshold is met (FR-ANON-02)
+        withheldReason:
+          type: [string, 'null']
+        isFinal:
+          type: boolean
+          description: False means the score is labelled provisional (FR-SCORE-07)
+        groupComponent: { type: [number, 'null'] }
+        individualComponent: { type: [number, 'null'] }
+        participationRatio:
+          type: [number, 'null']
+          description: p — shown live so the multiplier is never a surprise (FR-SCORE-13)
+        participationMultiplier: { type: [number, 'null'] }
+        total: { type: [number, 'null'] }
+
+    CoverageReport:
+      type: object
+      required: [assignmentId, rows]
+      properties:
+        assignmentId: { type: integer, format: int64 }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [criterionId, side, itemAId, itemBId, coverage]
+            properties:
+              criterionId: { type: integer, format: int64 }
+              side:
+                $ref: '#/components/schemas/Side'
+              itemAId: { type: integer, format: int64 }
+              itemBId: { type: integer, format: int64 }
+              coverage: { type: integer }
+              submitted: { type: integer }
+              flags:
+                type: array
+                items:
+                  type: string
+                  enum: [LOW_CONFIDENCE, OVERRIDDEN]

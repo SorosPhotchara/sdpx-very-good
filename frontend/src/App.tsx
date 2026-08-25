@@ -8,18 +8,29 @@ export default function App() {
 
   useEffect(() => {
     async function load() {
-      const healthData = await getHealth()
-      setHealth(healthData?.status ?? 'offline')
-      setClassrooms(await getClassrooms())
+      // The landing page has to render with the backend down — that is the
+      // state a first-time visitor and the E2E smoke test both arrive in.
+      try {
+        const healthData = await getHealth()
+        setHealth(healthData?.status ?? 'offline')
+        setClassrooms(await getClassrooms())
+      } catch {
+        setHealth('offline')
+        setClassrooms([])
+      }
     }
     load()
   }, [])
 
   async function handleCreateClassroom() {
     if (!newClassroom.trim()) return
-    const classroom = await createClassroom(newClassroom.trim())
-    setClassrooms((current) => [...current, classroom])
-    setNewClassroom('')
+    try {
+      const classroom = await createClassroom(newClassroom.trim())
+      setClassrooms((current) => [...current, classroom])
+      setNewClassroom('')
+    } catch {
+      setHealth('offline')
+    }
   }
 
   return (
@@ -27,10 +38,10 @@ export default function App() {
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-blue-700 font-semibold text-xl">PairEval</div>
+            <div data-testid="brand" className="text-blue-700 font-semibold text-xl">PairEval</div>
             <div className="text-slate-500 text-sm">Pairwise evaluation for fair student scoring</div>
           </div>
-          <nav className="flex flex-wrap gap-4 text-slate-600">
+          <nav data-testid="main-nav" aria-label="Main" className="flex flex-wrap gap-4 text-slate-600">
             <a href="#features" className="hover:text-slate-900">Features</a>
             <a href="#values" className="hover:text-slate-900">Why PairEval</a>
             <a href="#cta" className="hover:text-slate-900">Get Started</a>
@@ -46,7 +57,7 @@ export default function App() {
               <p className="mt-3 text-slate-600">This frontend can now call the PairEval backend prototype for classroom creation and health checks.</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-600">
-              Backend status: <span className="font-semibold text-slate-900">{health}</span>
+              Backend status: <span data-testid="backend-status" className="font-semibold text-slate-900">{health}</span>
             </div>
           </div>
 
@@ -59,10 +70,13 @@ export default function App() {
                     value={newClassroom}
                     onChange={(event) => setNewClassroom(event.target.value)}
                     placeholder="Classroom name"
+                    aria-label="Classroom name"
+                    data-testid="classroom-name-input"
                     className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
                   <button
                     onClick={handleCreateClassroom}
+                    data-testid="main-cta"
                     className="rounded-2xl bg-blue-600 px-5 py-3 text-white hover:bg-blue-700"
                   >
                     Create
@@ -72,16 +86,16 @@ export default function App() {
 
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
                 <h2 className="text-xl font-semibold text-slate-900">Classrooms</h2>
-                <div className="mt-4 space-y-3">
+                <div data-testid="classroom-list" className="mt-4 space-y-3">
                   {classrooms.length ? (
                     classrooms.map((classroom) => (
-                      <div key={classroom.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div key={classroom.id} data-testid="classroom-item" className="rounded-2xl border border-slate-200 bg-white p-4">
                         <div className="font-medium text-slate-900">{classroom.name}</div>
                         <div className="text-slate-500 text-sm">ID: {classroom.id}</div>
                       </div>
                     ))
                   ) : (
-                    <div className="text-slate-500">No classrooms yet.</div>
+                    <div data-testid="classroom-list-empty" className="text-slate-500">No classrooms yet.</div>
                   )}
                 </div>
               </div>
@@ -95,7 +109,7 @@ export default function App() {
           </div>
         </section>
 
-        <section id="features" className="mt-16 grid gap-8 sm:grid-cols-2">
+        <section id="features" data-testid="features-section" className="mt-16 grid gap-8 sm:grid-cols-2">
           <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
             <h2 className="text-xl font-semibold text-slate-900">Classroom & assignment workflow</h2>
             <p className="mt-3 text-slate-600">Create classrooms, import students by CSV, assign instructors, and define group/individual evaluation criteria.</p>

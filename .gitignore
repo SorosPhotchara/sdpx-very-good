@@ -141,3 +141,34 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# --- Python (added WS-01: these are why .pyc and paireval.db reached git) ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+htmlcov/
+.coverage
+.coverage.*
+
+# --- Local databases: never commit a db, it leaks real student rows ---
+*.db
+*.sqlite
+*.sqlite3
+
+# The committed coverage report is a WS-03 deliverable. It has to be excepted
+# explicitly, because the `coverage` pattern above matches any directory with
+# that name at any depth — which is why it was invisible at first.
+!docs/coverage/
+!docs/coverage/**
+
+# --- Playwright / E2E ---
+playwright-report/
+test-results/
+blob-report/
+.playwright/

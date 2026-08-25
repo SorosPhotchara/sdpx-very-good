@@ -1,7 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 class ClassroomBase(BaseModel):
     name: str
@@ -13,8 +14,7 @@ class ClassroomCreate(ClassroomBase):
 class Classroom(ClassroomBase):
     id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class StudentBase(BaseModel):
     email: EmailStr
@@ -30,8 +30,7 @@ class Student(StudentBase):
     classroom_id: int
     group_name: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class GroupBase(BaseModel):
     name: str
@@ -43,16 +42,15 @@ class GroupCreate(GroupBase):
 class Group(GroupBase):
     id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AssignmentBase(BaseModel):
     title: str
     description: Optional[str] = None
     classroom_id: int
-    group_score: float = 0.0
-    individual_score: float = 0.0
-    instructor_weight: float = 1.0
+    group_score: Decimal = Decimal("0")
+    individual_score: Decimal = Decimal("0")
+    instructor_weight: Decimal = Decimal("1")
     deadline: Optional[datetime] = None
 
 class AssignmentCreate(AssignmentBase):
@@ -61,13 +59,12 @@ class AssignmentCreate(AssignmentBase):
 class Assignment(AssignmentBase):
     id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CriteriaBase(BaseModel):
     assignment_id: int
     name: str
-    weight: float
+    weight: Decimal
     is_group: bool = True
 
 class CriteriaCreate(CriteriaBase):
@@ -76,8 +73,7 @@ class CriteriaCreate(CriteriaBase):
 class Criteria(CriteriaBase):
     id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PairBase(BaseModel):
     assignment_id: int
@@ -93,5 +89,4 @@ class Pair(PairBase):
     id: int
     assigned_count: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

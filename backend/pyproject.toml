@@ -1,19 +1,28 @@
 [project]
-name = "pairwise-evaluation-backend"
+name = "paireval-backend"
 version = "0.1.0"
-description = "Backend prototype for the PairEval system"
-authors = ["PairEval Team <team@example.com>"]
+description = "PairEval — pairwise-comparison marking for university group work"
+requires-python = ">=3.12"
+authors = [{ name = "PairEval Team" }]
 dependencies = [
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.23.0",
     "sqlalchemy>=2.0.0",
-    "pydantic>=2.0.0",
-    "python-multipart>=0.0.6"
+    "pydantic[email]>=2.0.0",
+    "python-multipart>=0.0.6",
 ]
 
-[project.urls]
-"Homepage" = "https://example.com"
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "hypothesis>=6.100.0",
+    "coverage>=7.0.0",
+    "openapi-spec-validator>=0.7.0",
+]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["app"]

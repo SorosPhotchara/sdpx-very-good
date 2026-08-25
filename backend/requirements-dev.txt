@@ -1,0 +1,11 @@
+-r requirements.txt
+
+# The test loop. `pytest` at the repository root needs these; without them the
+# verify step in AGENTS.md does not run, which is the one failure that makes
+# every other instruction in that file pointless.
+pytest>=8.0.0
+hypothesis>=6.100.0
+coverage>=7.0.0
+
+# `python3 -m openapi_spec_validator docs/openapi.yaml`
+openapi-spec-validator>=0.7.0

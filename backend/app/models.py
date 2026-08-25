@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -43,9 +43,9 @@ class Assignment(Base):
     title = Column(String, index=True)
     description = Column(Text, nullable=True)
     classroom_id = Column(Integer, ForeignKey("classrooms.id"))
-    group_score = Column(Float, default=0.0)
-    individual_score = Column(Float, default=0.0)
-    instructor_weight = Column(Float, default=1.0)
+    group_score = Column(Numeric(6, 2), default=0)
+    individual_score = Column(Numeric(6, 2), default=0)
+    instructor_weight = Column(Numeric(4, 2), default=1)
     deadline = Column(DateTime, nullable=True)
 
     classroom = relationship("Classroom", back_populates="assignments")
@@ -58,7 +58,7 @@ class Criteria(Base):
     id = Column(Integer, primary_key=True, index=True)
     assignment_id = Column(Integer, ForeignKey("assignments.id"))
     name = Column(String, index=True)
-    weight = Column(Float, default=0.0)
+    weight = Column(Numeric(5, 2), default=0)
     is_group = Column(Boolean, default=True)
 
     assignment = relationship("Assignment", back_populates="criteria")
@@ -75,6 +75,15 @@ class Pair(Base):
     right_group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     pair_type = Column(String, default="individual")
     assigned_count = Column(Integer, default=0)
+
+    # A pair without an evaluator is not an assignment, it is a row nobody will
+    # ever answer (FR-PAIR-02/03).
+    evaluator_id = Column(Integer, ForeignKey("students.id"), nullable=True)
+    # FR-PAIR-08: positions are randomised, so the side each item was shown on
+    # must be stored, or §9.1 cannot map the choice back to an item.
+    display_left_item_id = Column(String, nullable=True)
+    # Bumped on every re-generation, so old comparisons stay auditable (DR-02).
+    generation = Column(Integer, default=1)
 
     assignment = relationship("Assignment", back_populates="pairs")
     criteria = relationship("Criteria")

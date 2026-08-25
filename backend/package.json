@@ -1,7 +1,7 @@
 {
-  "name": "pairwise-evaluation-backend",
+  "name": "paireval-backend",
   "private": true,
   "scripts": {
-    "dev": "py -m uvicorn app.main:app --reload"
+    "dev": "python3 -m uvicorn app.main:app --reload"
   }
 }
