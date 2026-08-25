@@ -1,5 +1,9 @@
 # Test Plan
 
+```bash
+python -m pytest -q
+```
+
 ## Functions ที่ต้อง Test
 1. BookingService.create_booking()
    - ห้องว่าง → booking confirmed
