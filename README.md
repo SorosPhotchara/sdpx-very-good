@@ -26,6 +26,7 @@ This repository contains a Vite + React + TypeScript starter for the PairEval pr
 ```bash
 git clone <repo-url>
 cd sdpx-very-good
+cd frontend
 bun install
 bun run dev
 ```
