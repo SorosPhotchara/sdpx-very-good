@@ -35,7 +35,7 @@ docker compose -f compose.test.yaml down -v
 | สิ่งที่วัด | ผล | ใครวัด / วันที่ |
 |---|---|---|
 | `docker compose up` ครั้งแรก | ~40 วินาที จนถึง Vite ready — build image app 38.1 วินาที (pull `node:24-alpine` 7.3 วินาที, `npm ci` 17.5 วินาที, `npm run build` 2.4 วินาที, export image 7.3 วินาที) โดย pull `postgres:17-alpine` 16.9 วินาทีรันขนานกันไป จากนั้น db healthy และ Vite ready ใน 150 ms | george (Ubuntu 26.04) / 14-Sep-2026 |
-| `docker compose up` ครั้งถัดไป | _(กรอกหลังรัน)_ | |
+| `docker compose up` ครั้งถัดไป | 2 วินาที | Toto is comming (Windows11) 14-sep-2026 |
 | Clone ใหม่บนเครื่องที่ไม่เคยรัน project | _(กรอกหลังรัน)_ | |
 | Unit test ผ่าน → exit code | _(กรอกหลังรัน)_ | |
 | Unit test แดง → exit code (ต้องไม่ใช่ 0) | _(กรอกหลังรัน)_ | |
