@@ -1,0 +1,56 @@
+services:
+  test-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: testdb
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass    # รหัสทิ้งได้สำหรับ test เท่านั้น ไม่ใช่ secret จริง
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
+      interval: 3s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data    # ephemeral: อยู่ใน RAM หายเมื่อหยุด
+
+  unit:
+    build:
+      context: .
+      target: test
+    environment:
+      DATABASE_URL: postgres://testuser:testpass@test-db:5432/testdb
+      NODE_ENV: test
+    depends_on:
+      test-db:
+        condition: service_healthy
+    command: npm test
+
+  # production image ตัวจริง (runtime stage) ให้ e2e ยิงเข้าไป
+  app-test:
+    build:
+      context: .
+      target: runtime
+    environment:
+      DATABASE_URL: postgres://testuser:testpass@test-db:5432/testdb
+    healthcheck:                     # ถี่กว่าใน Dockerfile (30s) เพื่อให้ e2e ไม่ต้องรอนาน
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 3s
+      retries: 10
+    depends_on:
+      test-db:
+        condition: service_healthy
+    profiles: ["e2e"]
+
+  e2e:
+    build:
+      context: .
+      target: e2e                    # alpine รัน browser ไม่ได้ ใช้ image ของ Playwright แทน
+    environment:
+      DATABASE_URL: postgres://testuser:testpass@test-db:5432/testdb
+      BASE_URL: http://app-test:3000
+      NODE_ENV: test
+      CI: "true"
+    depends_on:
+      app-test:
+        condition: service_healthy
+    command: npx playwright test
+    profiles: ["e2e"]

@@ -25,7 +25,8 @@ Surface contradictions instead of silently choosing an interpretation. Keep curr
 - Entry: `index.html` → `src/main.tsx` (mounts `<App />` in `StrictMode`) → `src/App.tsx` (landing page).
 - Styling: Tailwind CSS 4 through `@tailwindcss/vite`; `src/index.css` only imports Tailwind.
 - Tooling: Bun is the package manager and test runner; `bun.lock` is the canonical lockfile.
-- Tests: `bun:test` in `src/**/*.test.tsx`, rendering components with `renderToStaticMarkup`. There is no DOM testing library and no E2E suite yet.
+- Tests: `bun:test` in `src/**/*.test.tsx`, rendering components with `renderToStaticMarkup`. There is no DOM testing library. E2E smoke tests use Playwright in `tests/e2e/`.
+- Containers: multi-stage `Dockerfile` (deps, build, test, e2e, runtime); `compose.yaml` for dev and `compose.test.yaml` for tests with an ephemeral Postgres. The app does not read `DATABASE_URL` yet.
 - Imports: relative paths only; no path alias is configured.
 - Available scripts: `dev`, `build`, `preview`, `test`, and `lint`.
 
@@ -65,6 +66,15 @@ bun run lint        # type-check with tsc --noEmit
 bun run build       # type-check, then production build into dist/
 bun run preview     # serve the completed production build
 ```
+
+## Commands
+
+Run tests in Docker before reporting a result — it is the same environment CI uses. A non-zero exit code means the tests failed.
+
+- dev:        `docker compose up` (app on http://localhost:3000)
+- unit test:  `docker compose -f compose.test.yaml up unit --build --abort-on-container-exit --exit-code-from unit`
+- e2e:        `docker compose -f compose.test.yaml --profile e2e up e2e --build --abort-on-container-exit --exit-code-from e2e`
+- teardown:   `docker compose -f compose.test.yaml down -v`
 
 ## Rules for Agents
 

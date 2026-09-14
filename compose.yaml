@@ -4,14 +4,15 @@ services:
       context: .
       target: build          # dev ใช้ stage ที่มี devDependencies
     ports:
-      - "3000:5173"
+      - "3000:3000"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://user:pass@db:5432/appdb}
       NODE_ENV: development
     volumes:
       - .:/app               # hot reload สำหรับ dev
       - /app/node_modules    # ไม่ override node_modules ใน image
-    command: npm run dev -- --host 0.0.0.0
+    # --host 0.0.0.0: Vite ฟังแค่ localhost โดย default ซึ่งเข้าจากนอก container ไม่ได้
+    command: npm run dev -- --host 0.0.0.0 --port 3000 --strictPort
     depends_on:
       db:
         condition: service_healthy
@@ -21,7 +22,7 @@ services:
     environment:
       POSTGRES_DB: appdb
       POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
+      POSTGRES_PASSWORD: pass  # รหัสสำหรับ local dev เท่านั้น ไม่ใช่ secret จริง
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user -d appdb"]
       interval: 5s
