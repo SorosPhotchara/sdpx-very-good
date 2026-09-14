@@ -23,7 +23,8 @@ Backend (FastAPI + SQLite) และ deployment (Vercel) เป็นแผน�
 ## เริ่มใช้งาน
 
 ```bash
-bun install     un run dev     
+bun install
+bun run dev     # เปิด http://localhost:5173
 ```
 
 ## Commands

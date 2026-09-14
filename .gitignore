@@ -1,7 +1,7 @@
 # ---------- Secrets / environment ----------
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # ---------- Python ----------
 __pycache__/
@@ -77,3 +77,9 @@ desktop.ini
 
 # ---------- Tools ----------
 .claude/settings.local.json
+
+
+.next/
+coverage/
+playwright-report/
+test-results/
