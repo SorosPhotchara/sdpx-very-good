@@ -1,0 +1,36 @@
+services:
+  app:
+    build:
+      context: .
+      target: build          # dev ใช้ stage ที่มี devDependencies
+    ports:
+      - "3000:5173"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://user:pass@db:5432/appdb}
+      NODE_ENV: development
+    volumes:
+      - .:/app               # hot reload สำหรับ dev
+      - /app/node_modules    # ไม่ override node_modules ใน image
+    command: npm run dev -- --host 0.0.0.0
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d appdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"          # expose สำหรับ local database tools
+
+volumes:
+  postgres_data:

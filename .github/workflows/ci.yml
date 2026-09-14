@@ -1,0 +1,13 @@
+name: CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read          # ให้สิทธิ์น้อยที่สุดเท่าที่จำเป็น
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: echo "Pipeline works!"
