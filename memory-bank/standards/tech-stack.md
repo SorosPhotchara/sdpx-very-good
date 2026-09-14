@@ -40,8 +40,8 @@ Date: 09-Sep-2026 (อัปเดตให้ตรงกับ code: 14-Sep-20
 ## Deployment
 - Platform (frontend): Vercel — Vite preset, build `bun run build`, output `dist`, deploy อัตโนมัติเมื่อ push เข้า `develop`
 - Platform (backend): ยังไม่ตัดสินใจ (lab แนะนำ Render สำหรับ FastAPI)
-- Staging URL: [จะเพิ่มหลัง deploy]
-- Commit-to-live time: [จะวัดหลัง deploy]
+- Staging URL: https://sdpx-very-good.vercel.app
+- Commit-to-live time: 9.30 วินาที (วัดเมื่อ WS-01)
 
 ## AI Tools
 - Agent ที่ใช้: GitHub Copilot, Claude, GPT Codex
