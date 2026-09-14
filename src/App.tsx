@@ -12,7 +12,7 @@ export function App() {
             Pairwise
           </h1>
           <p className="mt-3 text-lg text-slate-600">
-            Rank what matters, one comparison at a time — for university
+            Rank what matters, one comparisonssssssssss at a time — for university
             courses, projects, and peer review.
           </p>
 
