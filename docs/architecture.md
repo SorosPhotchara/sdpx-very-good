@@ -107,13 +107,14 @@ token is ever readable by JavaScript.
 
 ## Candidate units
 
-Loosely coupled pieces that can each get a `memory-bank/units/<name>/unit-brief.md`:
+Loosely coupled pieces. `pairing-engine`, `scoring-engine`, and `roster-import`
+have a brief in `memory-bank/units/<name>/unit-brief.md`:
 
 | Unit | Why it is its own unit | Test style from PRD §18 | Bolt type |
 |---|---|---|---|
 | `pairing-engine` | Pure algorithm: roster + config in, pair assignments out (§8) | Property-based, INV-1..5 | DDD |
 | `scoring-engine` | Pure math: comparisons + config in, scores out (§9) | Unit + golden test from §9.5 | DDD |
-| `classroom-roster` | Atomic CSV import, email normalization, membership (FR-CLASS-*) | Unit + integration | Simple |
+| `roster-import` | Atomic CSV import and email normalization (FR-CLASS-*) | Unit + integration | Simple |
 | `evaluation` | Autosave, submit, re-submit, deadline enforcement (FR-EVAL-*) | E2E | Simple |
 
 ## Where we differ from PRD §6
