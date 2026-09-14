@@ -3,9 +3,9 @@
 ## Decision Summary
 ทีม: เก่งมากครับ
 Domain: Pairwise
-Date: 09-Sep-2026 (อัปเดตให้ตรงกับ code: 14-Sep-2026)
+Date: 09-Sep-2026 (อัปเดตให้ตรงกับ code: 14-Sep-2026 · เปลี่ยน Database เป็น PostgreSQL และเลือกรูปแบบ session: 14-Sep-2026)
 
-> **สถานะปัจจุบัน:** มีแค่ frontend (landing page) — Backend และ Database ด้านล่างเป็นแผนที่ตัดสินใจแล้ว แต่ยังไม่ได้เริ่มทำ
+> **สถานะปัจจุบัน:** มีแค่ frontend (landing page) — Backend, Database และ Authentication ด้านล่างเป็นแผนที่ตัดสินใจแล้ว แต่ยังไม่ได้เริ่มทำ
 
 ## Frontend — ✅ ใช้งานอยู่
 - Framework: React 19.2 + Vite 7.3 (single-page app)
@@ -29,13 +29,23 @@ Date: 09-Sep-2026 (อัปเดตให้ตรงกับ code: 14-Sep-20
   - Python ecosystem — ถ้าต้องต่อกับงาน ML / ประมวลผลข้อมูล ใช้ numpy ฯลฯ ได้ตรง ๆ ไม่ต้องแยก service
 
 ## Database — ⏳ แผน (ยังไม่เริ่ม)
-- SQLite (ผ่าน SQLAlchemy หรือ SQLModel)
+- PostgreSQL (ผ่าน SQLAlchemy) — เปลี่ยนจาก SQLite เมื่อ 14-Sep-2026 ก่อนเริ่มทำ backend
+- Schema: [docs/erd.md](../../docs/erd.md)
 - Rationale:
-  - ไม่ต้องติดตั้ง server — เป็นไฟล์เดียว ไม่ต้องตั้ง user/password/port ทุกคน clone แล้วรันได้ทันที
-  - Backup ง่าย — ก๊อปไฟล์ `.db` ก็คือ backup
-  - เร็วสำหรับงานอ่านเยอะ — อ่านจาก disk ตรง ๆ ไม่มี network overhead
-  - ย้ายไป PostgreSQL ได้ภายหลัง — ใช้ ORM ทำให้เปลี่ยน connection string เป็นหลัก ไม่ต้องรื้อโค้ด
-- ข้อควรระวัง: platform ส่วนใหญ่ (Vercel, Render free tier) มี filesystem ที่ถูกล้างทุกครั้งที่ deploy/restart ถ้าใช้ SQLite บน production ต้องมี persistent disk หรือย้ายไป PostgreSQL — ต้องตัดสินใจก่อนเริ่มทำ backend
+  - ตรงกับ PRD §6 และ data model §11 ที่ใช้ `text[]` (เช่น `allowed_email_domains`, `flags`) และ `numeric` — SQLite ไม่มีชนิด array
+  - ข้อมูลอยู่รอดข้าม deploy — PRD ให้เก็บข้อมูล 2 ปีการศึกษา (§14.1) และ RPO ≤ 15 นาที (NFR-AVAIL-02) ขณะที่ไฟล์ SQLite บน host ส่วนใหญ่ถูกล้างทุกครั้งที่ deploy/restart
+  - รับการเขียนพร้อมกันได้ — ชั่วโมงสุดท้ายก่อน deadline มีคน autosave/submit พร้อมกันจำนวนมาก (NFR-SCALE-02) ส่วน SQLite เขียนได้ทีละ transaction
+  - ยังใช้ SQLAlchemy เหมือนแผนเดิม — แนวทางเขียน code ฝั่ง backend ไม่เปลี่ยน
+- ยังไม่ตัดสิน: host ของ database และวิธีรัน PostgreSQL ตอน local dev
+- หมายเหตุ: เป็นการเปลี่ยน stack หลังเลือกไปแล้ว — ควรบันทึกเหตุผลเป็น ADR (WS-08)
+
+## Authentication — ⏳ แผน (ยังไม่เริ่ม)
+- Login: Google OAuth 2.0 / OIDC เท่านั้น (FR-AUTH-01) แบบ authorization code flow ที่ server เป็นคนคุยกับ Google — browser redirect ไป Google แล้วกลับมาที่ `/api/auth/google/callback` token ของ Google จึงไม่ผ่าน JavaScript เลย (ตัดสินเมื่อ 14-Sep-2026)
+- Session: เก็บฝั่ง server ในตาราง `session` แล้วส่ง id ผ่าน cookie แบบ `httpOnly` + `Secure` + `SameSite` (FR-SEC-01) อายุ 12 ชั่วโมงและ refresh ได้ (FR-AUTH-04)
+- Rationale:
+  - ตรงกับ FR-SEC-01 ที่บังคับใช้ cookie — JavaScript ในหน้าเว็บอ่าน cookie `httpOnly` ไม่ได้ จึงขโมยผ่าน XSS ไม่ได้
+  - ยกเลิก session ได้ทันที (logout, ปิดบัญชี) เพราะเก็บไว้ที่ server — ต่างจาก JWT ที่ใช้ได้จนหมดอายุ
+- ข้อจำกัด: API ต้องอยู่ site เดียวกับเว็บ (เช่น Vercel rewrite `/api/*` ไป backend) เพราะ browser ไม่ส่ง cookie ข้าม site
 
 ## Deployment
 - Platform (frontend): Vercel — Vite preset, build `bun run build`, output `dist`, deploy อัตโนมัติเมื่อ push เข้า `develop`

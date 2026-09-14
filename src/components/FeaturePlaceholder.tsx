@@ -9,8 +9,8 @@ export function FeaturePlaceholder() {
         Comparison workspace
       </h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-        The pairwise comparison view will live here — two options side by side,
-        one choice at a time.
+        The evaluation view will live here — two groups or teammates side by
+        side, rated on a 6-point scale.
       </p>
     </section>
   );

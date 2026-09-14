@@ -12,8 +12,8 @@ export function App() {
             Pairwise
           </h1>
           <p className="mt-3 text-lg text-slate-600">
-            Rank what matters, one comparisons at a time — for university
-            courses, projects, and peer review.
+            Fair student evaluation for university group work — compare two
+            at a time for group and individual scores.
           </p>
 
           <a

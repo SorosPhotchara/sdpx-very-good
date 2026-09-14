@@ -1,0 +1,2192 @@
+openapi: 3.1.0
+info:
+  title: Pairwise API
+  version: 0.9.0
+  summary: Student evaluation system for university group work, based on pairwise comparison.
+  description: |
+    Scope: only the endpoints required by the user stories written so far.
+
+    | Story | Endpoints |
+    |---|---|
+    | US-AUTH-01 Login with university Google account | `GET /api/auth/google/start`, `GET /api/auth/google/callback`, `GET /api/auth/me`, `GET /api/classrooms` |
+    | US-AUTH-02 Cancel or error on the Google sign-in screen | `GET /api/auth/google/start`, `GET /api/auth/google/callback` |
+    | US-CLASS-01 Create a classroom and import the roster from CSV | `POST /api/classrooms`, `POST /api/classrooms/{classroomId}/roster:import` |
+    | US-ASSIGN-01 Create an assignment and its evaluation criteria | `POST /api/assignments`, `GET /api/classrooms/{classroomId}/assignments`, `POST /api/assignments/{assignmentId}:publish` |
+    | US-PUBLISH-01 Review feasibility, then publish | `GET /api/assignments/{assignmentId}/feasibility`, `POST /api/assignments/{assignmentId}:publish` |
+    | US-EVAL-01 Evaluate group pairs with autosave | `GET /api/assignments/{assignmentId}/my-evaluations`, `PUT /api/comparisons/{pairAssignmentId}` |
+    | US-EVAL-02 Submit and re-submit answers | `POST /api/assignments/{assignmentId}/submissions` |
+    | US-SCORE-01 Student views their own scores | `GET /api/assignments/{assignmentId}/my-score` |
+    | US-REPORT-01 Instructor views the Group Summary report | `GET /api/assignments/{assignmentId}/reports/group` |
+
+    Requirements come from `docs/prd.md` (PRD v2.0); the schema behind these
+    resources is in `docs/erd.md`.
+
+    **Sign-in.** The server runs the Google OAuth 2.0 authorization code flow:
+    the "Sign in with Google" button links to `GET /api/auth/google/start`, and
+    Google returns the browser to `GET /api/auth/google/callback`, which sets
+    the session cookie and redirects back to the SPA. No Google token ever
+    reaches JavaScript.
+
+    **Authentication.** Sessions are server-side (table `session`) and travel in
+    an `httpOnly`, `Secure`, `SameSite` cookie (FR-SEC-01, FR-AUTH-04). The API is
+    served from the same site as the SPA, so the browser sends the cookie
+    automatically.
+
+    **Errors.** Every error uses the same shape (PRD §12): a stable, machine-readable
+    `error.code` plus a human-readable `error.message` (FR-API-03). `error.details`
+    lists individual problems when there are several (every invalid CSV row, or
+    every side whose criteria weights are wrong).
+    `400` = the request cannot be read (not JSON, not multipart); `422` = readable
+    but fails validation; `409` = valid, but conflicts with the current state.
+
+    **Numbers.** Scores and weights are decimals (DR-04). The server compares them
+    with decimal arithmetic, never binary floating point.
+servers:
+  - url: https://sdpx-very-good.vercel.app
+    description: Staging. `/api/*` is planned to be rewritten by Vercel to the FastAPI backend, which is not deployed yet.
+tags:
+  - name: Auth
+    description: Sign-in with Google and the current session (US-AUTH-01, US-AUTH-02).
+  - name: Classrooms
+    description: Creating classrooms and listing the ones the user belongs to (US-AUTH-01, US-CLASS-01).
+  - name: Roster
+    description: Importing the student list of a classroom (US-CLASS-01).
+  - name: Assignments
+    description: Creating, listing, and publishing assignments (US-ASSIGN-01, US-PUBLISH-01).
+  - name: Evaluation
+    description: A student's own pairs, autosaved answers, and submissions (US-EVAL-01, US-EVAL-02).
+  - name: Scores
+    description: A student's own scores and participation (US-SCORE-01).
+  - name: Reports
+    description: Instructor reports on an assignment's scores (US-REPORT-01).
+security:
+  - sessionCookie: []
+paths:
+  /api/auth/google/start:
+    get:
+      operationId: startGoogleSignIn
+      summary: Start signing in with Google
+      description: |
+        The "Sign in with Google" button is a plain link to this endpoint. It
+        starts the OAuth 2.0 authorization code flow (FR-AUTH-01):
+
+        1. Create a random `state` and `nonce`, store them in a short-lived
+           `httpOnly` cookie, and redirect the browser to Google.
+        2. Always ask Google for the account chooser (`prompt=select_account`),
+           so a user who cancelled or picked the wrong account can choose
+           another one (US-AUTH-02 AC2).
+
+        Browsers follow the redirect; this endpoint returns JSON only when rate
+        limited.
+      tags: [Auth]
+      x-user-story: US-AUTH-01, US-AUTH-02
+      security: []
+      responses:
+        "302":
+          description: Redirect to Google's consent screen.
+          headers:
+            Location:
+              description: Google's authorization endpoint with `client_id`, `redirect_uri` (the callback below), `scope=openid email profile`, `state`, `nonce`, and `prompt=select_account`.
+              schema:
+                type: string
+                format: uri
+              example: https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=CLIENT_ID&redirect_uri=https%3A%2F%2Fsdpx-very-good.vercel.app%2Fapi%2Fauth%2Fgoogle%2Fcallback&scope=openid%20email%20profile&state=Zk3q9T&nonce=Qm1x7B&prompt=select_account
+            Set-Cookie:
+              description: "`pairwise_oauth_state` holds `state` and `nonce`: `HttpOnly`, `Secure`, `SameSite=Lax`, valid for 10 minutes. `Lax` is required so the browser sends it back on Google's redirect."
+              schema:
+                type: string
+              example: pairwise_oauth_state=Zk3q9T.Qm1x7B; Path=/api/auth/google; HttpOnly; Secure; SameSite=Lax; Max-Age=600
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/auth/google/callback:
+    get:
+      operationId: completeGoogleSignIn
+      summary: Google redirects here after the consent screen
+      description: |
+        Google sends the browser here with either `code` and `state`, or an
+        `error`. The response is always a redirect back into the SPA, so the
+        user never sees raw JSON or a blank page.
+
+        **Success.** Check that `state` matches the cookie set by
+        `/api/auth/google/start`, exchange `code` with Google server to server,
+        and verify the ID token (signature, audience, `nonce`). Then apply the
+        rules of US-AUTH-01: allowed domain (FR-AUTH-02), normalized-email match
+        to the roster (FR-AUTH-03), `PENDING` becomes `ACTIVE` (FR-CLASS-04),
+        and never a duplicate user. Create a session row, set the session
+        cookie, and redirect to `/`.
+
+        **Failure.** No session is created. The browser is redirected to
+        `/login?error=<CODE>` and the SPA shows the message for that code. The
+        list of codes is closed, and the URL never carries an email or other
+        personal data.
+
+        | `error` code | When | Story |
+        |---|---|---|
+        | `SIGN_IN_CANCELLED` | Google returned `error=access_denied` (the user pressed Cancel). The login page shows "You have not signed in" and does not redirect to Google by itself. | US-AUTH-02 AC1 |
+        | `GOOGLE_ERROR` | Google returned any other `error`, or the code exchange failed. Logged with the `requestId`, which is also added to the redirect as `requestId`. | US-AUTH-02 AC3 |
+        | `INVALID_STATE` | `state` is missing, or differs from the cookie. | US-AUTH-02 AC4 |
+        | `DOMAIN_NOT_ALLOWED` | The email is outside the allowed university domains. | US-AUTH-01 AC2 |
+        | `ACCOUNT_DISABLED` | The user's status is `DISABLED`. | — |
+        | `ACCOUNT_CONFLICT` | The Google account is linked to a different user than its email matches; refused instead of creating a duplicate. | US-AUTH-01 AC3 |
+
+        The `pairwise_oauth_state` cookie is cleared in every case, so a
+        callback URL cannot be replayed.
+      tags: [Auth]
+      x-user-story: US-AUTH-01, US-AUTH-02
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: Authorization code, present on success.
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          description: Must equal the value stored by `/api/auth/google/start`.
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          description: Set by Google instead of `code`, for example `access_denied`.
+          schema:
+            type: string
+      responses:
+        "302":
+          description: |
+            Back to the SPA: `/` with a new session on success, or
+            `/login?error=<CODE>` with no session on failure (see the table above).
+          headers:
+            Location:
+              description: "`/` on success; `/login?error=<CODE>` on failure, plus `&requestId=<id>` for `GOOGLE_ERROR`."
+              schema:
+                type: string
+              example: /login?error=SIGN_IN_CANCELLED
+            Set-Cookie:
+              description: On success, the session cookie `pairwise_session` (12 hours, `HttpOnly`, `Secure`, `SameSite=Lax`; FR-AUTH-04, FR-SEC-01). In every case, clears `pairwise_oauth_state`.
+              schema:
+                type: string
+              example: pairwise_session=3f9c2a7e5b1d; Path=/api; HttpOnly; Secure; SameSite=Lax; Max-Age=43200
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/auth/me:
+    get:
+      operationId: getCurrentUser
+      summary: Get the signed-in user
+      description: |
+        Returns the user behind the session cookie. The SPA calls this on every
+        page load; `401` means the user is not signed in, and the SPA sends them
+        to its login page (US-AUTH-01 AC1).
+      tags: [Auth]
+      x-user-story: US-AUTH-01
+      responses:
+        "200":
+          description: The user is signed in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+              example:
+                id: 42
+                email: somchai@kmitl.ac.th
+                displayName: Somchai A.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/classrooms:
+    get:
+      operationId: listMyClassrooms
+      summary: List the classrooms the signed-in user belongs to
+      description: |
+        Returns only classrooms where the user has a membership, with the role
+        they hold in each one (FR-AUTHZ-02, FR-AUTHZ-03). This is the dashboard
+        list in US-AUTH-01 AC3.
+      tags: [Classrooms]
+      x-user-story: US-AUTH-01
+      responses:
+        "200":
+          description: The user's classrooms. An empty list means the user is not in any roster yet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClassroomList"
+              example:
+                items:
+                  - id: 7
+                    name: Software Development Process
+                    slug: sdpx-2026-1
+                    timezone: Asia/Bangkok
+                    role: STUDENT
+                    group:
+                      id: 3
+                      name: Aurora
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      operationId: createClassroom
+      summary: Create a classroom
+      description: |
+        Creates an empty classroom. The caller becomes its `OWNER` (FR-CLASS-01).
+        The server derives a unique `slug` from the name, so creating two
+        classrooms with the same name does not conflict. Students are added with
+        `POST /api/classrooms/{classroomId}/roster:import`.
+
+        Traces to US-CLASS-01 ("create classroom").
+      tags: [Classrooms]
+      x-user-story: US-CLASS-01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClassroomRequest"
+            example:
+              name: Software Development Process
+              timezone: Asia/Bangkok
+              allowedEmailDomains: [kmitl.ac.th]
+      responses:
+        "201":
+          description: Classroom created. The caller is its `OWNER`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Classroom"
+              example:
+                id: 7
+                name: Software Development Process
+                slug: sdpx-2026-1
+                timezone: Asia/Bangkok
+                allowedEmailDomains: [kmitl.ac.th]
+                status: ACTIVE
+                role: OWNER
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/classrooms/{classroomId}/roster:import:
+    post:
+      operationId: importRoster
+      summary: Import the student list from a CSV file
+      description: |
+        Imports students and their groups from a CSV file (FR-CLASS-01).
+
+        - **Columns:** `email` and `group_name` are required; `student_id` and
+          `display_name` are optional. Header names are matched
+          case-insensitively (US-CLASS-01 AC1).
+        - **Atomic:** if any row is invalid, nothing is saved and every problem
+          is listed in `error.details` (FR-CLASS-02, US-CLASS-01 AC2).
+        - **Row numbers** match what Excel shows: the header is row 1, the first
+          student is row 2.
+        - Emails with no user yet create a `PENDING` user that activates at
+          first sign-in (FR-CLASS-04).
+
+        Allowed for `OWNER`, `CO_TEACHER`, and `TA` of the classroom (PRD §3).
+      tags: [Roster]
+      x-user-story: US-CLASS-01
+      parameters:
+        - $ref: "#/components/parameters/ClassroomId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/RosterImportRequest"
+            encoding:
+              file:
+                contentType: text/csv
+      responses:
+        "201":
+          description: Every row was valid and the roster was saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RosterImportResult"
+              example:
+                studentCount: 100
+                pendingUserCount: 97
+                groups:
+                  - name: Aurora
+                    memberCount: 5
+                  - name: Borealis
+                    memberCount: 5
+                warnings: []
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/RosterRejected"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/classrooms/{classroomId}/assignments:
+    get:
+      operationId: listClassroomAssignments
+      summary: List the assignments of a classroom
+      description: |
+        The classroom's assignment list, where a newly created `DRAFT`
+        assignment appears (US-ASSIGN-01 AC1). Newest first.
+
+        Any member of the classroom can call this. `DRAFT` assignments are
+        returned only to `OWNER`, `CO_TEACHER`, and `TA`.
+      tags: [Assignments]
+      x-user-story: US-ASSIGN-01
+      parameters:
+        - $ref: "#/components/parameters/ClassroomId"
+      responses:
+        "200":
+          description: The assignments the caller may see.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignmentList"
+              example:
+                items:
+                  - id: 15
+                    name: Sprint 1 Demo
+                    status: DRAFT
+                    groupDeadline: "2026-09-30T16:59:00Z"
+                    individualDeadline: "2026-10-02T16:59:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/assignments:
+    post:
+      operationId: createAssignment
+      summary: Create an assignment with its criteria
+      description: |
+        Creates an assignment in status `DRAFT` together with its criteria for
+        each side (FR-ASSIGN-01, US-ASSIGN-01 AC1).
+
+        - Criteria weights are **not** required to total 100% yet; that is
+          checked when publishing (FR-ASSIGN-02). A draft can be saved half-done.
+        - Deadlines are accepted with any UTC offset and stored in UTC
+          (FR-ASSIGN-05).
+        - `artifactUrl` may be `null` until the instructor has it; students then
+          see a notice instead of a link (FR-EVAL-02).
+        - Pairing and scoring settings (`instructor_weight`, `target_coverage`,
+          score floor/ceiling, ...) take their defaults from `docs/erd.md`; no
+          story sets them yet.
+
+        Allowed for `OWNER` and `CO_TEACHER` of the classroom (PRD §3).
+      tags: [Assignments]
+      x-user-story: US-ASSIGN-01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAssignmentRequest"
+            example:
+              classroomId: 7
+              name: Sprint 1 Demo
+              description: Evaluate each group's Sprint 1 demo.
+              artifactUrl: https://sdpx-very-good.vercel.app/demos/sprint-1
+              groupMaxScore: 15
+              individualMaxScore: 5
+              groupDeadline: "2026-09-30T23:59:00+07:00"
+              individualDeadline: "2026-10-02T23:59:00+07:00"
+              criteria:
+                - side: GROUP
+                  name: UX
+                  weightPct: 40
+                - side: GROUP
+                  name: Completeness
+                  weightPct: 35
+                - side: GROUP
+                  name: Innovation
+                  weightPct: 25
+                - side: INDIVIDUAL
+                  name: Teamwork
+                  weightPct: 50
+                - side: INDIVIDUAL
+                  name: Management
+                  weightPct: 50
+      responses:
+        "201":
+          description: Assignment created in status `DRAFT`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+              example:
+                id: 15
+                classroomId: 7
+                name: Sprint 1 Demo
+                description: Evaluate each group's Sprint 1 demo.
+                artifactUrl: https://sdpx-very-good.vercel.app/demos/sprint-1
+                groupMaxScore: 15
+                individualMaxScore: 5
+                groupDeadline: "2026-09-30T16:59:00Z"
+                individualDeadline: "2026-10-02T16:59:00Z"
+                status: DRAFT
+                criteria:
+                  - id: 101
+                    side: GROUP
+                    name: UX
+                    description: null
+                    weightPct: 40
+                    displayOrder: 1
+                  - id: 102
+                    side: GROUP
+                    name: Completeness
+                    description: null
+                    weightPct: 35
+                    displayOrder: 2
+                  - id: 103
+                    side: GROUP
+                    name: Innovation
+                    description: null
+                    weightPct: 25
+                    displayOrder: 3
+                  - id: 104
+                    side: INDIVIDUAL
+                    name: Teamwork
+                    description: null
+                    weightPct: 50
+                    displayOrder: 1
+                  - id: 105
+                    side: INDIVIDUAL
+                    name: Management
+                    description: null
+                    weightPct: 50
+                    displayOrder: 2
+                createdAt: "2026-09-14T08:00:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/assignments/{assignmentId}/feasibility:
+    get:
+      operationId: getAssignmentFeasibility
+      summary: Preview coverage, workload, and total comparisons before publishing
+      description: |
+        Computes what publishing would generate, without generating anything
+        (FR-PAIR-04). Uses the current roster, the assignment's criteria, and its
+        pairing settings (`target_coverage`, `max_workload`).
+
+        - **Group side** (PRD §8.2): if the target coverage is impossible, it is
+          lowered to the highest feasible value, and every reduction comes with
+          a reason in numbers, never a vague warning (FR-PAIR-05, US-PUBLISH-01 AC2).
+        - **Individual side** (PRD §8.3): coverage is `m − 2` for a group of `m`.
+          Groups of 2 or fewer get no individual evaluation (FR-PAIR-12), groups
+          of 3 are flagged `LOW_CONFIDENCE` (FR-PAIR-13), and groups whose
+          workload would exceed `max_workload` are sampled (FR-PAIR-14).
+        - **Achieved coverage.** Every student gets the same workload, so the
+          coverage the pairs really get can be higher than the target. For
+          example 200 students in 10 groups: target 5, workload 2, achieved 8–9.
+          `achievedCoverageMin` and `achievedCoverageMax` show the real range.
+        - **`feasibilityHash`** identifies these exact inputs. `:publish` requires
+          it, so publishing always uses the numbers the instructor reviewed.
+
+        Allowed for `OWNER` and `CO_TEACHER` of the classroom (PRD §3), for
+        `DRAFT` assignments only.
+      tags: [Assignments]
+      x-user-story: US-PUBLISH-01
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      responses:
+        "200":
+          description: |
+            The feasibility preview. The example is PRD §8.2 example 2: 12
+            students in 3 groups of 4, target coverage 5, 3 group criteria and
+            2 individual criteria.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feasibility"
+              example:
+                feasibilityHash: sha256:9f2c1e7a44d0b6e1
+                group:
+                  criteriaCount: 3
+                  studentCount: 12
+                  groupCount: 3
+                  pairCount: 3
+                  targetCoverage: 5
+                  effectiveCoverage: 4
+                  achievedCoverageMin: 4
+                  achievedCoverageMax: 4
+                  workloadPerCriterion: 1
+                  comparisons: 36
+                  reasons:
+                    - code: ELIGIBLE_EVALUATORS_LIMIT
+                      message: Each pair has only 4 eligible evaluators, so the maximum coverage is 4 per pair (not 5).
+                individual:
+                  criteriaCount: 2
+                  comparisons: 72
+                  groups:
+                    - groupId: 3
+                      groupName: Aurora
+                      memberCount: 4
+                      coverage: 2
+                      workloadPerCriterion: 3
+                      comparisons: 24
+                      flag: OK
+                      reason: null
+                    - groupId: 4
+                      groupName: Borealis
+                      memberCount: 4
+                      coverage: 2
+                      workloadPerCriterion: 3
+                      comparisons: 24
+                      flag: OK
+                      reason: null
+                    - groupId: 5
+                      groupName: Cosmos
+                      memberCount: 4
+                      coverage: 2
+                      workloadPerCriterion: 3
+                      comparisons: 24
+                      flag: OK
+                      reason: null
+                totalComparisons: 108
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/assignments/{assignmentId}:publish:
+    post:
+      operationId: publishAssignment
+      summary: Publish a draft assignment and generate its pairs
+      description: |
+        Moves a `DRAFT` assignment to `PUBLISHED` and generates every pair
+        assignment up front, never at runtime (FR-PAIR-01). Nothing is saved
+        unless every step succeeds.
+
+        1. **Criteria weight check** (FR-ASSIGN-02, US-ASSIGN-01 AC2–AC3). For
+           every side whose max score is above 0, the criteria weights must
+           total 100 ± 0.01: 99.99 passes, 99.98 is rejected. A side with max
+           score 0 has no criteria and is skipped (FR-ASSIGN-07). Failing sides
+           are listed in `error.details`.
+        2. **Same inputs as the reviewed preview.** `feasibilityHash` must match
+           the current roster, criteria, and settings. If anything changed since
+           the instructor looked at the feasibility preview, publishing is
+           refused with `409 FEASIBILITY_CHANGED` (US-PUBLISH-01 AC1).
+        3. **Infeasible side.** If a side's coverage would be 0 (for example a
+           classroom with only 2 groups), publishing is refused with
+           `422 PAIRING_INFEASIBLE`. Provisional until open question Q2 is decided.
+        4. **Generate pairs** with the previewed numbers. The number of pair
+           assignments created equals the preview's `totalComparisons`, and no
+           evaluator gets the same pair twice within a criterion (FR-PAIR-07,
+           INV-2). Left/right positions are randomized and stored (FR-PAIR-08),
+           and generation is deterministic for the stored `pairing_seed`
+           (FR-PAIR-09).
+
+        Allowed for `OWNER` and `CO_TEACHER` of the classroom (PRD §3).
+      tags: [Assignments]
+      x-user-story: US-ASSIGN-01, US-PUBLISH-01
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishRequest"
+            example:
+              feasibilityHash: sha256:9f2c1e7a44d0b6e1
+      responses:
+        "200":
+          description: |
+            Published and every pair assignment generated. `pairAssignmentCount`
+            equals `totalComparisons` from the reviewed preview (US-PUBLISH-01 AC1).
+            The example has 12 students in 3 groups and one group criterion.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishResult"
+              example:
+                assignment:
+                  id: 15
+                  classroomId: 7
+                  name: Sprint 1 Demo
+                  description: Evaluate each group's Sprint 1 demo.
+                  artifactUrl: https://sdpx-very-good.vercel.app/demos/sprint-1
+                  groupMaxScore: 15
+                  individualMaxScore: 0
+                  groupDeadline: "2026-09-30T16:59:00Z"
+                  individualDeadline: "2026-10-02T16:59:00Z"
+                  status: PUBLISHED
+                  criteria:
+                    - id: 101
+                      side: GROUP
+                      name: UX
+                      description: null
+                      weightPct: 100
+                      displayOrder: 1
+                  createdAt: "2026-09-14T08:00:00Z"
+                pairAssignmentCount: 12
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/PublishRejected"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/assignments/{assignmentId}/my-evaluations:
+    get:
+      operationId: getMyEvaluations
+      summary: Get my pairs to evaluate, grouped by criterion
+      description: |
+        Everything the evaluation page needs in one call: every criterion of the
+        requested side as a section, with the caller's pairs and their current
+        draft or submitted answers (FR-EVAL-01, US-EVAL-01 AC1). Reopening the
+        page after closing the browser shows the saved answers again
+        (US-EVAL-01 AC3).
+
+        - **Left and right** are the positions stored at publish (FR-PAIR-08).
+          `choice` is always relative to them: `1` = left much better, `6` =
+          right much better (§9.1). There is no "equal" option (D1).
+        - Only the caller's own pairs are returned. Nothing reveals who else
+          evaluates the same pair (FR-ANON-01).
+        - After the side's deadline, `readOnly` is `true` and the answers can no
+          longer be changed (FR-EVAL-08).
+        - Rules specific to `side=INDIVIDUAL` (for example no page for groups of
+          2 or fewer, FR-EVAL-12) belong to the individual evaluation story.
+
+        Any member with pairs in this assignment can call this. When
+        evaluation opens after publish is still open question Q1.
+      tags: [Evaluation]
+      x-user-story: US-EVAL-01
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+        - $ref: "#/components/parameters/EvaluationSide"
+      responses:
+        "200":
+          description: |
+            The caller's pairs for this side. The example matches US-EVAL-01 AC1:
+            3 group criteria with 2 pairs each; one answer is already saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyEvaluations"
+              example:
+                assignmentId: 15
+                side: GROUP
+                deadline: "2026-09-30T16:59:00Z"
+                readOnly: false
+                lastSavedAt: "2026-09-20T07:41:00Z"
+                sections:
+                  - criterion:
+                      id: 101
+                      name: UX
+                      description: How easy the product is to use.
+                    comparisons:
+                      - pairAssignmentId: 5001
+                        left:
+                          id: 3
+                          name: Aurora
+                        right:
+                          id: 4
+                          name: Borealis
+                        choice: 2
+                        status: DRAFT
+                      - pairAssignmentId: 5002
+                        left:
+                          id: 6
+                          name: Cosmos
+                        right:
+                          id: 3
+                          name: Aurora
+                        choice: null
+                        status: null
+                  - criterion:
+                      id: 102
+                      name: Completeness
+                      description: null
+                    comparisons:
+                      - pairAssignmentId: 5003
+                        left:
+                          id: 4
+                          name: Borealis
+                        right:
+                          id: 6
+                          name: Cosmos
+                        choice: null
+                        status: null
+                      - pairAssignmentId: 5004
+                        left:
+                          id: 3
+                          name: Aurora
+                        right:
+                          id: 7
+                          name: Draco
+                        choice: null
+                        status: null
+                  - criterion:
+                      id: 103
+                      name: Innovation
+                      description: null
+                    comparisons:
+                      - pairAssignmentId: 5005
+                        left:
+                          id: 7
+                          name: Draco
+                        right:
+                          id: 4
+                          name: Borealis
+                        choice: null
+                        status: null
+                      - pairAssignmentId: 5006
+                        left:
+                          id: 6
+                          name: Cosmos
+                        right:
+                          id: 7
+                          name: Draco
+                        choice: null
+                        status: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/comparisons/{pairAssignmentId}:
+    put:
+      operationId: saveComparisonDraft
+      summary: Autosave my answer for one pair
+      description: |
+        Saves the caller's answer for one pair as a draft (FR-EVAL-04,
+        US-EVAL-01 AC3). The SPA calls this after the student stops changing an
+        answer, within 2 seconds, and shows "Saved at HH:MM" from `savedAt`.
+
+        - **Idempotent** (FR-API-01): sending the same `choice` again changes
+          nothing, not even `savedAt`, so a retry after a dropped connection is
+          always safe.
+        - `201` when this pair gets its first answer, `200` when an existing
+          answer is changed.
+        - Drafts never count toward scores (FR-EVAL-09); submitting is a
+          separate step. Changing an answer that was already submitted makes it
+          a draft again, but its last submitted value keeps counting until the
+          next submit (US-EVAL-02).
+
+        Only the evaluator assigned to this pair can save it. Any other caller
+        gets `404`, so pair ids reveal nothing about other students (FR-AUTHZ-02).
+      tags: [Evaluation]
+      x-user-story: US-EVAL-01
+      parameters:
+        - $ref: "#/components/parameters/PairAssignmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveComparisonRequest"
+            example:
+              choice: 2
+      responses:
+        "200":
+          description: The existing answer was updated, or was already this choice.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedComparison"
+              example:
+                pairAssignmentId: 5001
+                choice: 2
+                status: DRAFT
+                savedAt: "2026-09-20T07:41:00Z"
+        "201":
+          description: The first answer for this pair was saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedComparison"
+              example:
+                pairAssignmentId: 5002
+                choice: 5
+                status: DRAFT
+                savedAt: "2026-09-20T07:42:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/assignments/{assignmentId}/submissions:
+    post:
+      operationId: submitAnswers
+      summary: Submit all my current answers for one side
+      description: |
+        Submits every answer the caller currently has on one side of the
+        assignment, answered or not (FR-EVAL-05). Each accepted submit adds one
+        version to the caller's history for that side; all versions are kept
+        (FR-EVAL-06).
+
+        - **Incomplete is allowed.** Unanswered pairs are simply not submitted
+          and are reported in `unansweredCount`; they lower participation, not
+          the scores other people receive (§9.4).
+        - **Re-submit** as often as needed before the side's deadline. Scores
+          always use the latest submitted version of each answer (FR-EVAL-06).
+          Answers can be changed but not cleared, so a re-submit never has
+          fewer answers than the previous one.
+        - **Deadline.** After the side's deadline the request is refused with
+          `409 DEADLINE_PASSED`; the last submitted version keeps counting and
+          the evaluation page becomes read-only (FR-EVAL-08, US-EVAL-02 AC1).
+        - **Idempotency** (FR-API-02). `Idempotency-Key` is required. A second
+          request with the same key and the same body records nothing new and
+          returns the first response again with `Idempotent-Replayed: true`, so
+          a double click adds only one version (US-EVAL-02 AC2). The same key
+          with a different body is refused with `409 IDEMPOTENCY_KEY_REUSED`.
+
+        Allowed for members with pairs to evaluate (students, and `OWNER` /
+        `CO_TEACHER` evaluating as instructors). `TA` cannot evaluate (PRD §3).
+      tags: [Evaluation]
+      x-user-story: US-EVAL-02
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitRequest"
+            example:
+              side: GROUP
+      responses:
+        "201":
+          description: |
+            Submitted, and one version was added to the history. A replayed
+            request (same `Idempotency-Key`) returns this same body again with
+            `Idempotent-Replayed: true` and adds no version.
+          headers:
+            Idempotent-Replayed:
+              description: "`true` when this is the stored response of an earlier request with the same `Idempotency-Key`."
+              schema:
+                type: boolean
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionReceipt"
+              example:
+                assignmentId: 15
+                side: GROUP
+                revisionNo: 3
+                submittedAt: "2026-09-21T09:15:00Z"
+                submittedCount: 4
+                unansweredCount: 2
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/assignments/{assignmentId}/my-score:
+    get:
+      operationId: getMyScore
+      summary: Get my group score, individual score, and participation
+      description: |
+        The signed-in student's own results for one assignment (FR-REPORT-06).
+        Nothing in the response identifies who evaluated whom (FR-ANON-01).
+
+        - **Scores come from the latest computation.** Interim scores are
+          recomputed daily at 02:00 classroom time and when the instructor asks
+          (FR-SCORE-06); `computedAt` says when. Participation (`p`, `M`) is
+          always live (FR-SCORE-13).
+        - **k-anonymity** (FR-ANON-02). Until at least `k_min` (default 3)
+          teammates have submitted evaluations that include the student, the
+          individual score has status `NOT_ENOUGH_DATA` and no value
+          (US-SCORE-01 AC1). The check uses the same data as the latest
+          computation, so a single teammate's submit never changes the page
+          on its own.
+        - **Current values only** (FR-ANON-03). There is no history, previous
+          value, or change since the last computation, in this response or
+          any other endpoint (US-SCORE-01 AC2).
+        - **Interim or final.** `scoreStatus` is `INTERIM` until the instructor
+          finalizes; the SPA then labels every score "Interim — may change"
+          (FR-SCORE-07, US-SCORE-01 AC2).
+
+        Only for students of the classroom (PRD §3 — staff have no score of
+        their own). A `DRAFT` assignment is not visible to students, so it
+        returns `404`.
+      tags: [Scores]
+      x-user-story: US-SCORE-01
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      responses:
+        "200":
+          description: |
+            The student's current results. Values in the examples come from the
+            PRD §9.5 worked example (group Aurora, students Nok and Ton).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyScore"
+              examples:
+                notEnoughTeammatesYet:
+                  summary: Only 2 teammates have submitted so far (US-SCORE-01 AC1)
+                  value:
+                    assignmentId: 15
+                    scoreStatus: INTERIM
+                    computedAt: "2026-09-21T19:00:00Z"
+                    group:
+                      status: AVAILABLE
+                      value: 12.798
+                      maxScore: 15
+                    individual:
+                      status: NOT_ENOUGH_DATA
+                      value: null
+                      maxScore: 5
+                    participation:
+                      p: 0.6
+                      multiplier: 0.667
+                      completionThreshold: 0.9
+                      submittedComparisons: 9
+                      assignedComparisons: 15
+                available:
+                  summary: Enough teammates have submitted
+                  value:
+                    assignmentId: 15
+                    scoreStatus: INTERIM
+                    computedAt: "2026-09-22T19:00:00Z"
+                    group:
+                      status: AVAILABLE
+                      value: 12.798
+                      maxScore: 15
+                    individual:
+                      status: AVAILABLE
+                      value: 4.13
+                      maxScore: 5
+                    participation:
+                      p: 1
+                      multiplier: 1
+                      completionThreshold: 0.9
+                      submittedComparisons: 15
+                      assignedComparisons: 15
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/assignments/{assignmentId}/reports/group:
+    get:
+      operationId: getGroupSummaryReport
+      summary: Group Summary report — every group's score by criterion
+      description: |
+        One row per group and one cell per group criterion, each with the
+        quality index `q`, the number of comparisons behind it, the weighted
+        score, and flags (FR-REPORT-01). Scores follow PRD §9: band mapping from
+        `q`, times the criterion weight, times `groupMaxScore`.
+
+        - **Low confidence.** A cell with fewer than `min_comparisons`
+          (default 3) comparisons carries `LOW_CONFIDENCE` and is not finalized
+          automatically (FR-SCORE-05, US-REPORT-01 AC1). Its score is still
+          shown so the instructor can judge it.
+        - **Interim or final.** `scoreStatus` is `INTERIM` until the assignment
+          is finalized; the SPA labels every score "Interim — may change"
+          (FR-SCORE-07, US-REPORT-01 AC2).
+        - **Latest computation.** Values come from the latest computation
+          (FR-SCORE-06); `computedAt` says when.
+        - A cell with no comparisons at all has `qualityIndex` and
+          `weightedScore` set to `null`, and the row's `total` is `null`.
+        - Rows are sorted by group name.
+
+        Allowed for `OWNER` and `CO_TEACHER` of the classroom. Students get
+        `403` (FR-AUTHZ-01, FR-REPORT-06).
+      tags: [Reports]
+      x-user-story: US-REPORT-01
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      responses:
+        "200":
+          description: |
+            The report. Aurora's row is the PRD §9.5 worked example (floor 0.60,
+            ceiling 1.00, group max 15). Borealis received only 2 UX comparisons,
+            so its UX cell is `LOW_CONFIDENCE` (US-REPORT-01 AC1).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupSummaryReport"
+              example:
+                assignmentId: 15
+                scoreStatus: INTERIM
+                computedAt: "2026-09-22T19:00:00Z"
+                groupMaxScore: 15
+                criteria:
+                  - id: 101
+                    name: UX
+                    weightPct: 40
+                  - id: 102
+                    name: Completeness
+                    weightPct: 35
+                  - id: 103
+                    name: Innovation
+                    weightPct: 25
+                rows:
+                  - groupId: 3
+                    groupName: Aurora
+                    cells:
+                      - criterionId: 101
+                        qualityIndex: 0.72
+                        comparisonCount: 8
+                        weightedScore: 5.328
+                        flags: []
+                      - criterionId: 102
+                        qualityIndex: 0.55
+                        comparisonCount: 8
+                        weightedScore: 4.305
+                        flags: []
+                      - criterionId: 103
+                        qualityIndex: 0.61
+                        comparisonCount: 9
+                        weightedScore: 3.165
+                        flags: []
+                    total: 12.798
+                  - groupId: 4
+                    groupName: Borealis
+                    cells:
+                      - criterionId: 101
+                        qualityIndex: 0.4
+                        comparisonCount: 2
+                        weightedScore: 4.56
+                        flags: [LOW_CONFIDENCE]
+                      - criterionId: 102
+                        qualityIndex: 0.5
+                        comparisonCount: 8
+                        weightedScore: 4.2
+                        flags: []
+                      - criterionId: 103
+                        qualityIndex: 0.45
+                        comparisonCount: 8
+                        weightedScore: 2.925
+                        flags: []
+                    total: 11.685
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: pairwise_session
+      description: Opaque session id set by `GET /api/auth/google/callback`. The server stores only its hash (`session.token_hash`).
+  parameters:
+    ClassroomId:
+      name: classroomId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    AssignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    PairAssignmentId:
+      name: pairAssignmentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    EvaluationSide:
+      name: side
+      in: query
+      required: true
+      schema:
+        $ref: "#/components/schemas/CriterionSide"
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: A new random value (for example a UUID) per submit action, reused only when retrying that same action.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+      example: 3b1f8c2e-6d4a-4f0e-9a51-2c7d8e9f0a1b
+  schemas:
+    CurrentUser:
+      type: object
+      required: [id, email, displayName]
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+          description: Normalized email (lowercase, no `+tag`).
+        displayName:
+          type: [string, "null"]
+          description: From the roster, if the instructor provided one.
+    ClassroomList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassroomSummary"
+    ClassroomSummary:
+      type: object
+      required: [id, name, slug, timezone, role, group]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        slug:
+          type: string
+        timezone:
+          type: string
+          description: IANA time zone name, e.g. `Asia/Bangkok`.
+        role:
+          $ref: "#/components/schemas/ClassroomRole"
+        group:
+          description: The student's group; `null` for staff.
+          oneOf:
+            - $ref: "#/components/schemas/GroupRef"
+            - type: "null"
+    CreateClassroomRequest:
+      type: object
+      additionalProperties: false
+      required: [name, timezone, allowedEmailDomains]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        timezone:
+          type: string
+          description: IANA time zone name. Deadlines are shown in this zone (FR-ASSIGN-05).
+        allowedEmailDomains:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            description: A domain without `@`, e.g. `kmitl.ac.th`.
+          description: Only emails in these domains can sign in to this classroom (FR-AUTH-02).
+    Classroom:
+      type: object
+      required: [id, name, slug, timezone, allowedEmailDomains, status, role]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        slug:
+          type: string
+        timezone:
+          type: string
+        allowedEmailDomains:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [ACTIVE, ARCHIVED]
+        role:
+          $ref: "#/components/schemas/ClassroomRole"
+    ClassroomRole:
+      type: string
+      enum: [OWNER, CO_TEACHER, TA, STUDENT]
+      description: The user's role in this classroom. Roles belong to the classroom, not the user (FR-AUTHZ-03).
+    GroupRef:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+    RosterImportRequest:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          contentMediaType: text/csv
+          description: UTF-8 CSV with a header row. Columns `email`, `group_name`, and optionally `student_id`, `display_name`.
+    RosterImportResult:
+      type: object
+      required: [studentCount, pendingUserCount, groups, warnings]
+      properties:
+        studentCount:
+          type: integer
+          minimum: 1
+        pendingUserCount:
+          type: integer
+          minimum: 0
+          description: Students who have never signed in; they activate at first sign-in (FR-CLASS-04).
+        groups:
+          type: array
+          items:
+            type: object
+            required: [name, memberCount]
+            properties:
+              name:
+                type: string
+              memberCount:
+                type: integer
+                minimum: 1
+        warnings:
+          type: array
+          description: Problems that did not block the import, grouped by `code` (FR-CLASS-03).
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+    CriterionSide:
+      type: string
+      enum: [GROUP, INDIVIDUAL]
+    AssignmentStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, OPEN, CLOSED, FINALIZED, ARCHIVED]
+      description: Lifecycle in PRD §7.3. When `PUBLISHED` becomes `OPEN` is still open question Q1.
+    CriterionInput:
+      type: object
+      additionalProperties: false
+      required: [side, name, weightPct]
+      properties:
+        side:
+          $ref: "#/components/schemas/CriterionSide"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: [string, "null"]
+          description: What evaluators should look for. Clear criteria reduce disagreement (R6).
+        weightPct:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Percent weight within its side, up to 2 decimal places.
+    Criterion:
+      type: object
+      required: [id, side, name, description, weightPct, displayOrder]
+      properties:
+        id:
+          type: integer
+          format: int64
+        side:
+          $ref: "#/components/schemas/CriterionSide"
+        name:
+          type: string
+        description:
+          type: [string, "null"]
+        weightPct:
+          type: number
+          minimum: 0
+          maximum: 100
+        displayOrder:
+          type: integer
+          minimum: 1
+          description: Position within its side, from the order in the request.
+    CreateAssignmentRequest:
+      type: object
+      additionalProperties: false
+      required: [classroomId, name, description, artifactUrl, groupMaxScore, individualMaxScore, groupDeadline, individualDeadline, criteria]
+      properties:
+        classroomId:
+          type: integer
+          format: int64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        artifactUrl:
+          type: [string, "null"]
+          format: uri
+          description: Where students see the work they evaluate (A5). `null` if not available yet.
+        groupMaxScore:
+          type: number
+          minimum: 0
+          maximum: 9999.99
+          description: Full score of the group side. `0` means no group evaluation.
+        individualMaxScore:
+          type: number
+          minimum: 0
+          maximum: 9999.99
+          description: Full score of the individual side. `0` means no individual evaluation (FR-ASSIGN-07).
+        groupDeadline:
+          type: string
+          format: date-time
+          description: RFC 3339 with an offset, e.g. `2026-09-30T23:59:00+07:00`. Stored as UTC.
+        individualDeadline:
+          type: string
+          format: date-time
+          description: RFC 3339 with an offset. Stored as UTC.
+        criteria:
+          type: array
+          description: Criteria of both sides, in display order. Weights may be incomplete while in `DRAFT`.
+          items:
+            $ref: "#/components/schemas/CriterionInput"
+    Assignment:
+      type: object
+      required: [id, classroomId, name, description, artifactUrl, groupMaxScore, individualMaxScore, groupDeadline, individualDeadline, status, criteria, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        classroomId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        description:
+          type: string
+        artifactUrl:
+          type: [string, "null"]
+          format: uri
+        groupMaxScore:
+          type: number
+        individualMaxScore:
+          type: number
+        groupDeadline:
+          type: string
+          format: date-time
+          description: UTC.
+        individualDeadline:
+          type: string
+          format: date-time
+          description: UTC.
+        status:
+          $ref: "#/components/schemas/AssignmentStatus"
+        criteria:
+          type: array
+          items:
+            $ref: "#/components/schemas/Criterion"
+        createdAt:
+          type: string
+          format: date-time
+    AssignmentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssignmentSummary"
+    AssignmentSummary:
+      type: object
+      required: [id, name, status, groupDeadline, individualDeadline]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/AssignmentStatus"
+        groupDeadline:
+          type: string
+          format: date-time
+        individualDeadline:
+          type: string
+          format: date-time
+    Feasibility:
+      type: object
+      required: [feasibilityHash, group, individual, totalComparisons]
+      properties:
+        feasibilityHash:
+          type: string
+          minLength: 1
+          description: Identifies the inputs this preview was computed from. Send it to `:publish`.
+        group:
+          description: Group side; `null` when `groupMaxScore` is 0.
+          oneOf:
+            - $ref: "#/components/schemas/GroupSideFeasibility"
+            - type: "null"
+        individual:
+          description: Individual side; `null` when `individualMaxScore` is 0 (FR-ASSIGN-07).
+          oneOf:
+            - $ref: "#/components/schemas/IndividualSideFeasibility"
+            - type: "null"
+        totalComparisons:
+          type: integer
+          minimum: 0
+          description: Pair assignments publishing will create, across both sides and every criterion.
+    GroupSideFeasibility:
+      type: object
+      required: [criteriaCount, studentCount, groupCount, pairCount, targetCoverage, effectiveCoverage, achievedCoverageMin, achievedCoverageMax, workloadPerCriterion, comparisons, reasons]
+      properties:
+        criteriaCount:
+          type: integer
+          minimum: 0
+        studentCount:
+          type: integer
+          minimum: 0
+          description: S in PRD §8.2.
+        groupCount:
+          type: integer
+          minimum: 0
+          description: N in PRD §8.2.
+        pairCount:
+          type: integer
+          minimum: 0
+          description: P = N(N−1)/2.
+        targetCoverage:
+          type: integer
+          minimum: 1
+          description: The assignment's `target_coverage` setting (default 5).
+        effectiveCoverage:
+          type: integer
+          minimum: 0
+          description: R actually used after checking the constraints in PRD §8.2. Lower than `targetCoverage` only when the target is impossible.
+        achievedCoverageMin:
+          type: integer
+          minimum: 0
+          description: Fewest comparisons any pair will get per criterion.
+        achievedCoverageMax:
+          type: integer
+          minimum: 0
+          description: Most comparisons any pair will get per criterion. At most `achievedCoverageMin` + 1 (FR-PAIR-06).
+        workloadPerCriterion:
+          type: integer
+          minimum: 0
+          description: k — pairs each student evaluates per group criterion.
+        comparisons:
+          type: integer
+          minimum: 0
+          description: Pair assignments on this side, across all group criteria.
+        reasons:
+          type: array
+          description: Why `effectiveCoverage` is below `targetCoverage`, with the numbers (FR-PAIR-05). Empty when nothing was reduced.
+          items:
+            $ref: "#/components/schemas/FeasibilityReason"
+    IndividualSideFeasibility:
+      type: object
+      required: [criteriaCount, groups, comparisons]
+      properties:
+        criteriaCount:
+          type: integer
+          minimum: 0
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/IndividualGroupFeasibility"
+        comparisons:
+          type: integer
+          minimum: 0
+          description: Pair assignments on this side, across all groups and individual criteria.
+    IndividualGroupFeasibility:
+      type: object
+      required: [groupId, groupName, memberCount, coverage, workloadPerCriterion, comparisons, flag, reason]
+      properties:
+        groupId:
+          type: integer
+          format: int64
+        groupName:
+          type: string
+        memberCount:
+          type: integer
+          minimum: 1
+          description: m in PRD §8.3.
+        coverage:
+          type: integer
+          minimum: 0
+          description: m − 2, or less when sampled.
+        workloadPerCriterion:
+          type: integer
+          minimum: 0
+          description: C(m−1, 2), capped at `max_workload`.
+        comparisons:
+          type: integer
+          minimum: 0
+          description: Pair assignments for this group across all individual criteria.
+        flag:
+          type: string
+          enum: [OK, LOW_CONFIDENCE, SAMPLED, NOT_EVALUATED]
+          description: "`NOT_EVALUATED`: m ≤ 2 (FR-PAIR-12). `LOW_CONFIDENCE`: m = 3 (FR-PAIR-13). `SAMPLED`: workload capped at `max_workload` (FR-PAIR-14)."
+        reason:
+          type: [string, "null"]
+          description: The explanation in numbers whenever `flag` is not `OK`.
+    FeasibilityReason:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [ELIGIBLE_EVALUATORS_LIMIT, PAIRS_PER_EVALUATOR_LIMIT, MAX_WORKLOAD_LIMIT]
+          description: Which constraint of PRD §8.2 lowered the coverage — (3), (1), or (2).
+        message:
+          type: string
+          description: Shown to the instructor as is, with the actual numbers.
+    PublishRequest:
+      type: object
+      additionalProperties: false
+      required: [feasibilityHash]
+      properties:
+        feasibilityHash:
+          type: string
+          minLength: 1
+          description: From the feasibility preview the instructor reviewed.
+    PublishResult:
+      type: object
+      required: [assignment, pairAssignmentCount]
+      properties:
+        assignment:
+          $ref: "#/components/schemas/Assignment"
+        pairAssignmentCount:
+          type: integer
+          minimum: 0
+          description: Pair assignments generated. Equals `totalComparisons` of the reviewed preview.
+    Choice:
+      type: integer
+      minimum: 1
+      maximum: 6
+      description: |
+        6-point forced choice, relative to the displayed positions (§9.1, D1):
+        1 left much better · 2 left better · 3 left slightly better ·
+        4 right slightly better · 5 right better · 6 right much better.
+    ComparisonStatus:
+      type: string
+      enum: [DRAFT, SUBMITTED]
+      description: Status of the caller's current answer. `EXCLUDED` is never shown to students.
+    MyEvaluations:
+      type: object
+      required: [assignmentId, side, deadline, readOnly, lastSavedAt, sections]
+      properties:
+        assignmentId:
+          type: integer
+          format: int64
+        side:
+          $ref: "#/components/schemas/CriterionSide"
+        deadline:
+          type: string
+          format: date-time
+          description: Deadline of this side, UTC.
+        readOnly:
+          type: boolean
+          description: "`true` after the deadline; answers can no longer change (FR-EVAL-08)."
+        lastSavedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Latest `savedAt` over all answers on this page, for the "Saved at HH:MM" status.
+        sections:
+          type: array
+          description: One section per criterion of this side, in display order.
+          items:
+            $ref: "#/components/schemas/EvaluationSection"
+    EvaluationSection:
+      type: object
+      required: [criterion, comparisons]
+      properties:
+        criterion:
+          type: object
+          required: [id, name, description]
+          properties:
+            id:
+              type: integer
+              format: int64
+            name:
+              type: string
+            description:
+              type: [string, "null"]
+        comparisons:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvaluationComparison"
+    EvaluationComparison:
+      type: object
+      required: [pairAssignmentId, left, right, choice, status]
+      properties:
+        pairAssignmentId:
+          type: integer
+          format: int64
+        left:
+          $ref: "#/components/schemas/EvaluationItem"
+        right:
+          $ref: "#/components/schemas/EvaluationItem"
+        choice:
+          description: The caller's current answer; `null` if not answered yet.
+          oneOf:
+            - $ref: "#/components/schemas/Choice"
+            - type: "null"
+        status:
+          description: "`null` if not answered yet."
+          oneOf:
+            - $ref: "#/components/schemas/ComparisonStatus"
+            - type: "null"
+    EvaluationItem:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: A group id on the GROUP side, a user id on the INDIVIDUAL side.
+        name:
+          type: string
+          description: Group name, or the student's display name.
+    SaveComparisonRequest:
+      type: object
+      additionalProperties: false
+      required: [choice]
+      properties:
+        choice:
+          $ref: "#/components/schemas/Choice"
+    SavedComparison:
+      type: object
+      required: [pairAssignmentId, choice, status, savedAt]
+      properties:
+        pairAssignmentId:
+          type: integer
+          format: int64
+        choice:
+          $ref: "#/components/schemas/Choice"
+        status:
+          $ref: "#/components/schemas/ComparisonStatus"
+        savedAt:
+          type: string
+          format: date-time
+          description: When this answer last changed, UTC.
+    SubmitRequest:
+      type: object
+      additionalProperties: false
+      required: [side]
+      properties:
+        side:
+          $ref: "#/components/schemas/CriterionSide"
+    SubmissionReceipt:
+      type: object
+      required: [assignmentId, side, revisionNo, submittedAt, submittedCount, unansweredCount]
+      properties:
+        assignmentId:
+          type: integer
+          format: int64
+        side:
+          $ref: "#/components/schemas/CriterionSide"
+        revisionNo:
+          type: integer
+          minimum: 1
+          description: Version number of this submit for the caller and side. Grows by exactly 1 per accepted submit; a replay returns the same number.
+        submittedAt:
+          type: string
+          format: date-time
+        submittedCount:
+          type: integer
+          minimum: 0
+          description: Answers included in this version.
+        unansweredCount:
+          type: integer
+          minimum: 0
+          description: Assigned pairs on this side still without an answer.
+    MyScore:
+      type: object
+      required: [assignmentId, scoreStatus, computedAt, group, individual, participation]
+      properties:
+        assignmentId:
+          type: integer
+          format: int64
+        scoreStatus:
+          type: string
+          enum: [INTERIM, FINAL]
+          description: "`INTERIM` until the instructor finalizes (FR-SCORE-07); the SPA labels every score accordingly."
+        computedAt:
+          type: [string, "null"]
+          format: date-time
+          description: When the scores were last computed, UTC. `null` before the first computation.
+        group:
+          $ref: "#/components/schemas/ScoreComponent"
+        individual:
+          $ref: "#/components/schemas/ScoreComponent"
+        participation:
+          $ref: "#/components/schemas/Participation"
+    ScoreComponent:
+      type: object
+      required: [status, value, maxScore]
+      properties:
+        status:
+          type: string
+          enum: [AVAILABLE, NOT_ENOUGH_DATA, NOT_APPLICABLE]
+          description: |
+            `AVAILABLE`: `value` holds the score. `NOT_ENOUGH_DATA`: fewer than
+            `k_min` teammates have submitted (FR-ANON-02) or nothing has been
+            computed yet. `NOT_APPLICABLE`: this side is not evaluated, e.g. max
+            score 0 (FR-ASSIGN-07) or a group of 2 or fewer (FR-PAIR-12).
+        value:
+          type: [number, "null"]
+          minimum: 0
+          description: Score on this side before the participation multiplier. `null` unless `status` is `AVAILABLE`.
+        maxScore:
+          type: number
+          minimum: 0
+    Participation:
+      type: object
+      required: [p, multiplier, completionThreshold, submittedComparisons, assignedComparisons]
+      description: The student's own participation, live (FR-SCORE-13, §9.4). Shown from the day the assignment opens (FR-SCORE-12).
+      properties:
+        p:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Submitted comparisons ÷ assigned comparisons, both sides combined.
+        multiplier:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: M = min(1, p ÷ completionThreshold).
+        completionThreshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: The assignment's `completion_threshold` (default 0.9).
+        submittedComparisons:
+          type: integer
+          minimum: 0
+        assignedComparisons:
+          type: integer
+          minimum: 0
+    ScoreFlag:
+      type: string
+      enum: [LOW_CONFIDENCE, OVERRIDDEN]
+      description: "`LOW_CONFIDENCE`: fewer than `min_comparisons` comparisons (FR-SCORE-05). `OVERRIDDEN`: set by the instructor with a reason (FR-SCORE-08)."
+    GroupSummaryReport:
+      type: object
+      required: [assignmentId, scoreStatus, computedAt, groupMaxScore, criteria, rows]
+      properties:
+        assignmentId:
+          type: integer
+          format: int64
+        scoreStatus:
+          type: string
+          enum: [INTERIM, FINAL]
+          description: "`INTERIM` until the assignment is finalized (FR-SCORE-07)."
+        computedAt:
+          type: [string, "null"]
+          format: date-time
+          description: When these values were computed, UTC. `null` before the first computation.
+        groupMaxScore:
+          type: number
+          minimum: 0
+        criteria:
+          type: array
+          description: The group criteria, in display order. Each row has one cell per criterion, in the same order.
+          items:
+            $ref: "#/components/schemas/ReportCriterion"
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupSummaryRow"
+    ReportCriterion:
+      type: object
+      required: [id, name, weightPct]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        weightPct:
+          type: number
+          minimum: 0
+          maximum: 100
+    GroupSummaryRow:
+      type: object
+      required: [groupId, groupName, cells, total]
+      properties:
+        groupId:
+          type: integer
+          format: int64
+        groupName:
+          type: string
+        cells:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupSummaryCell"
+        total:
+          type: [number, "null"]
+          minimum: 0
+          description: Sum of the row's weighted scores; `null` if any cell has no score yet.
+    GroupSummaryCell:
+      type: object
+      required: [criterionId, qualityIndex, comparisonCount, weightedScore, flags]
+      properties:
+        criterionId:
+          type: integer
+          format: int64
+        qualityIndex:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+          description: q in PRD §9.2; `null` when there are no comparisons.
+        comparisonCount:
+          type: integer
+          minimum: 0
+          description: Submitted comparisons that include this group on this criterion.
+        weightedScore:
+          type: [number, "null"]
+          minimum: 0
+          description: (floor + (ceiling − floor) × q) × weight × groupMaxScore (§9.3); `null` when there are no comparisons.
+        flags:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreFlag"
+    ErrorDetail:
+      type: object
+      required: [code, message, field, row]
+      properties:
+        code:
+          type: string
+          pattern: "^[A-Z][A-Z0-9_]*$"
+          description: For example `INVALID_EMAIL`, `DUPLICATE_EMAIL`, `MISSING_COLUMN`, `CRITERIA_WEIGHT_SUM`.
+        message:
+          type: string
+        field:
+          type: [string, "null"]
+          description: The field or CSV column the problem is in, if any.
+        row:
+          type: [integer, "null"]
+          minimum: 1
+          description: CSV row number as shown in Excel (header = 1); `null` when the problem is not in one row.
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, field, requestId]
+          properties:
+            code:
+              type: string
+              pattern: "^[A-Z][A-Z0-9_]*$"
+              description: Stable machine-readable code (FR-API-03).
+            message:
+              type: string
+              description: Human-readable explanation.
+            field:
+              type: [string, "null"]
+              description: The request field that caused the error, if any.
+            requestId:
+              type: string
+              description: Id of the request, also written to the structured log (NFR-OBS-01).
+            details:
+              type: array
+              description: Individual problems when there is more than one.
+              items:
+                $ref: "#/components/schemas/ErrorDetail"
+  responses:
+    BadRequest:
+      description: The request cannot be read, for example the body is not valid JSON or not `multipart/form-data`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: MALFORMED_REQUEST
+              message: The request body is not valid JSON.
+              field: null
+              requestId: 01J9X8ZK3Q7M2B
+    Unauthorized:
+      description: |
+        No valid session. Codes: `NOT_AUTHENTICATED` (no session cookie),
+        `SESSION_EXPIRED` (older than 12 hours). The SPA then sends the user to
+        its login page (US-AUTH-01 AC1).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            notAuthenticated:
+              value:
+                error:
+                  code: NOT_AUTHENTICATED
+                  message: Sign in to continue.
+                  field: null
+                  requestId: 01J9X8ZK3Q7M2C
+            sessionExpired:
+              value:
+                error:
+                  code: SESSION_EXPIRED
+                  message: Your session has expired. Sign in again.
+                  field: null
+                  requestId: 01J9X8ZK3Q7M2D
+    Forbidden:
+      description: |
+        `INSUFFICIENT_ROLE`: signed in, but the user's role in this classroom
+        cannot do this (PRD §3).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: INSUFFICIENT_ROLE
+              message: Your role in this classroom does not allow this action.
+              field: null
+              requestId: 01J9X8ZK3Q7M2J
+    NotFound:
+      description: |
+        `NOT_FOUND`: the resource does not exist, **or** the user is not a member
+        of its classroom. Both return 404 so the response does not reveal that
+        the resource exists (FR-AUTHZ-02).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            classroomNotFound:
+              value:
+                error:
+                  code: NOT_FOUND
+                  message: Classroom not found.
+                  field: null
+                  requestId: 01J9X8ZK3Q7M2K
+            assignmentNotFound:
+              value:
+                error:
+                  code: NOT_FOUND
+                  message: Assignment not found.
+                  field: null
+                  requestId: 01J9X8ZK3Q7M2Q
+    Conflict:
+      description: |
+        The request conflicts with the current state. Codes:
+        `ROSTER_ALREADY_EXISTS` (the classroom already has a roster; provisional
+        until open question Q5 is decided),
+        `ASSIGNMENT_NOT_DRAFT` (feasibility and publish work only on a `DRAFT`
+        assignment), `FEASIBILITY_CHANGED` (the roster, criteria, or settings
+        changed after the feasibility preview; review it again, US-PUBLISH-01 AC1),
+        `DEADLINE_PASSED` (the side's deadline has passed; answers are read-only,
+        FR-EVAL-08), `ASSIGNMENT_NOT_OPEN` (the assignment is not accepting
+        answers, for example it was unpublished; when it opens is still Q1),
+        `IDEMPOTENCY_KEY_REUSED` (the `Idempotency-Key` was already used for a
+        request with a different body).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            rosterAlreadyExists:
+              value:
+                error:
+                  code: ROSTER_ALREADY_EXISTS
+                  message: This classroom already has a roster.
+                  field: null
+                  requestId: 01J9X8ZK3Q7M2L
+            assignmentNotDraft:
+              value:
+                error:
+                  code: ASSIGNMENT_NOT_DRAFT
+                  message: This assignment is already published.
+                  field: null
+                  requestId: 01J9X8ZK3Q7M2R
+            feasibilityChanged:
+              value:
+                error:
+                  code: FEASIBILITY_CHANGED
+                  message: The roster or criteria changed after you reviewed the feasibility. Review the new numbers, then publish.
+                  field: feasibilityHash
+                  requestId: 01J9X8ZK3Q7M2U
+            deadlinePassed:
+              value:
+                error:
+                  code: DEADLINE_PASSED
+                  message: The evaluation deadline for this assignment has passed.
+                  field: null
+                  requestId: 01J9X8ZK3Q7M2X
+            assignmentNotOpen:
+              value:
+                error:
+                  code: ASSIGNMENT_NOT_OPEN
+                  message: This assignment is not accepting answers.
+                  field: null
+                  requestId: 01J9X8ZK3Q7M2Y
+            idempotencyKeyReused:
+              value:
+                error:
+                  code: IDEMPOTENCY_KEY_REUSED
+                  message: This Idempotency-Key was already used for a different request.
+                  field: Idempotency-Key
+                  requestId: 01J9X8ZK3Q7M30
+    ValidationFailed:
+      description: The body can be read but fails validation. `error.field` names the first invalid field.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            invalidTimezone:
+              value:
+                error:
+                  code: VALIDATION_FAILED
+                  message: Asia/Bangkokk is not a known time zone.
+                  field: timezone
+                  requestId: 01J9X8ZK3Q7M2M
+            missingName:
+              value:
+                error:
+                  code: VALIDATION_FAILED
+                  message: name is required.
+                  field: name
+                  requestId: 01J9X8ZK3Q7M2S
+            invalidChoice:
+              value:
+                error:
+                  code: VALIDATION_FAILED
+                  message: choice must be an integer from 1 to 6.
+                  field: choice
+                  requestId: 01J9X8ZK3Q7M2Z
+            missingIdempotencyKey:
+              value:
+                error:
+                  code: VALIDATION_FAILED
+                  message: The Idempotency-Key header is required.
+                  field: Idempotency-Key
+                  requestId: 01J9X8ZK3Q7M31
+    RosterRejected:
+      description: |
+        The CSV was read but at least one row or column is invalid. **Nothing
+        was saved** (FR-CLASS-02). Every problem is listed in `error.details`
+        with its Excel row number (US-CLASS-01 AC2).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            invalidEmailRow:
+              value:
+                error:
+                  code: ROSTER_INVALID
+                  message: The file has 1 problem. Nothing was imported.
+                  field: file
+                  requestId: 01J9X8ZK3Q7M2N
+                  details:
+                    - code: INVALID_EMAIL
+                      message: "'somchai@' is not a valid email address."
+                      field: email
+                      row: 42
+            missingColumn:
+              value:
+                error:
+                  code: ROSTER_INVALID
+                  message: The file has 1 problem. Nothing was imported.
+                  field: file
+                  requestId: 01J9X8ZK3Q7M2P
+                  details:
+                    - code: MISSING_COLUMN
+                      message: The required column group_name is missing.
+                      field: group_name
+                      row: null
+    PublishRejected:
+      description: |
+        Publishing was rejected. Nothing changed; the assignment is still `DRAFT`.
+        Codes: `CRITERIA_WEIGHTS_INVALID` (a side's weights do not total
+        100 ± 0.01, FR-ASSIGN-02, US-ASSIGN-01 AC2), `PAIRING_INFEASIBLE` (a side
+        would get coverage 0; provisional until Q2), `VALIDATION_FAILED`
+        (`feasibilityHash` missing).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            criteriaWeightsInvalid:
+              value:
+                error:
+                  code: CRITERIA_WEIGHTS_INVALID
+                  message: Group criteria total 95%; must equal 100%
+                  field: criteria
+                  requestId: 01J9X8ZK3Q7M2T
+                  details:
+                    - code: CRITERIA_WEIGHT_SUM
+                      message: Group criteria total 95%; must equal 100%
+                      field: criteria.GROUP
+                      row: null
+            pairingInfeasible:
+              value:
+                error:
+                  code: PAIRING_INFEASIBLE
+                  message: No student can evaluate the group side, because every student belongs to one of the 2 groups.
+                  field: null
+                  requestId: 01J9X8ZK3Q7M2V
+            missingFeasibilityHash:
+              value:
+                error:
+                  code: VALIDATION_FAILED
+                  message: feasibilityHash is required. Open the feasibility preview first.
+                  field: feasibilityHash
+                  requestId: 01J9X8ZK3Q7M2W
+    TooManyRequests:
+      description: Rate limit exceeded (FR-API-04).
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: RATE_LIMITED
+              message: Too many requests. Try again shortly.
+              field: null
+              requestId: 01J9X8ZK3Q7M2H
