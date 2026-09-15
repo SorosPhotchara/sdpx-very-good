@@ -24,6 +24,13 @@ services:
         condition: service_healthy
     command: npm test
 
+  # FastAPI backend ตัวจริง ให้ app-test proxy /api/rosters/* เข้าไป (server.mjs)
+  backend-test:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    profiles: ["e2e"]
+
   # production image ตัวจริง (runtime stage) ให้ e2e ยิงเข้าไป
   app-test:
     build:
@@ -31,12 +38,15 @@ services:
       target: runtime
     environment:
       DATABASE_URL: postgres://testuser:testpass@test-db:5432/testdb
+      BACKEND_URL: http://backend-test:8000
     healthcheck:                     # ถี่กว่าใน Dockerfile (30s) เพื่อให้ e2e ไม่ต้องรอนาน
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
       interval: 3s
       retries: 10
     depends_on:
       test-db:
+        condition: service_healthy
+      backend-test:
         condition: service_healthy
     profiles: ["e2e"]
 

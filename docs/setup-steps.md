@@ -39,4 +39,4 @@ docker compose -f compose.test.yaml down -v
 | Clone ใหม่บนเครื่องที่ไม่เคยรัน project | _(กรอกหลังรัน)_ | |
 | Unit test ผ่าน → exit code | _(กรอกหลังรัน)_ | |
 | Unit test แดง → exit code (ต้องไม่ใช่ 0) | _(กรอกหลังรัน)_ | |
-| E2E ผ่าน → exit code | _(กรอกหลังรัน)_ | |
+| E2E ผ่าน → exit code | `0` (4 pass, 0 fail) — ต้องมี `backend-test` service ใน `compose.test.yaml` ด้วย ไม่งั้น roster e2e จะแดงเพราะเรียก backend ไม่ได้ | Claude / 15-Sep-2026 |

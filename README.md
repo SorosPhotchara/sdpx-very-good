@@ -3,8 +3,9 @@
 เว็บสำหรับจัดอันดับสิ่งต่าง ๆ ด้วยการเปรียบเทียบทีละคู่ (pairwise comparison)
 สำหรับงานในมหาวิทยาลัย — จัดอันดับโปรเจกต์ หัวข้อ หรือ peer review
 
-> **สถานะปัจจุบัน:** โครง frontend (landing page) เท่านั้น
-> หน้าเปรียบเทียบจริงยังเป็น placeholder และยังไม่มี backend / database
+> **สถานะปัจจุบัน:** Frontend เป็น landing page + หน้าเปรียบเทียบจริงยังเป็น placeholder
+> Backend เริ่มมี domain code แล้ว (`backend/`, FastAPI) ครอบคลุม roster import และ publish service
+> แต่ยังไม่มี database จริง (มีแค่ in-memory Fake สำหรับ test) และยังไม่ได้ deploy
 
 ## Tech Stack
 
@@ -27,6 +28,15 @@ bun install
 bun run dev     # เปิด http://localhost:5173
 ```
 
+Backend (Python):
+
+```bash
+python -m venv .venv && .venv/Scripts/activate   # หรือ source .venv/bin/activate บน macOS/Linux
+pip install -r backend/requirements.txt -r requirements-dev.txt
+pytest                                            # รัน unit tests
+uvicorn app.main:app --reload --app-dir backend   # เปิด API ที่ http://localhost:8000
+```
+
 ## Commands
 
 | คำสั่ง | ทำอะไร |
@@ -37,6 +47,8 @@ bun run dev     # เปิด http://localhost:5173
 | `bun run lint` | ตรวจ type ด้วย `tsc --noEmit` |
 | `bun run build` | ตรวจ type แล้ว build ลง `dist/` |
 | `bun run preview` | ดู production build ที่ build แล้ว |
+| `pytest` | รัน backend unit tests ด้วย `pytest` |
+| `uvicorn app.main:app --reload --app-dir backend` | รัน FastAPI dev server (port 8000) |
 
 ## โครงสร้างโปรเจกต์
 
@@ -50,6 +62,18 @@ src/
   components/
     Navbar.tsx                      แถบนำทาง (data-testid="main-nav")
     FeaturePlaceholder.tsx          ที่ที่หน้าเปรียบเทียบจะมาอยู่
+backend/
+  app/
+    main.py                         FastAPI app — /api/health, /api/rosters/import
+    domain/roster.py                parse_roster, normalize_email, allocate_pairs
+    services/publish.py             publish(assignment_id, repo)
+    repositories/protocols.py       AssignmentRepo (Protocol)
+  requirements.txt                  fastapi, pydantic, uvicorn
+tests/
+  unit/                             pytest — test_roster_import.py, test_publish.py
+  fakes/fake_assignment_repo.py     in-memory AssignmentRepo สำหรับ test
+  factories.py                      make_roster_row / make_roster_csv / make_roster
+  conftest.py                       fixtures — valid_csv, csv_with_bad_row_42
 memory-bank/standards/tech-stack.md บันทึกการตัดสินใจเรื่อง tech stack
 AGENTS.md                           กติกาสำหรับ AI agent ที่มาแก้ repo นี้
 LOOP_NOTES.md                       บันทึกผลการทดลองให้ AI รันจน test เขียว

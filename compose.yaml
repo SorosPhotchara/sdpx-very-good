@@ -8,6 +8,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://user:pass@db:5432/appdb}
       NODE_ENV: development
+      BACKEND_URL: http://backend:8000
     volumes:
       - .:/app               # hot reload สำหรับ dev
       - /app/node_modules    # ไม่ override node_modules ใน image
@@ -16,6 +17,18 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"          # expose สำหรับเรียก /docs ตรง ๆ ตอน dev
+    volumes:
+      - ./backend:/app       # hot reload สำหรับ dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   db:
     image: postgres:17-alpine

@@ -6,41 +6,42 @@
 
 สถานะ: ✅ มี test และผ่าน · 🟡 กำลังทำใน WS-03 lab · ⬜ ยังไม่ทำ (ดู "กฎที่ยังไม่มี test")
 
-> ชื่อ function ด้านล่างเป็นชื่อที่ **เสนอ** — ยังไม่มี domain code (unit-brief: "No code exists yet")
+> ชื่อ function ด้านล่างเป็นชื่อที่ **เสนอ** — domain code ของ Roster Import และ Publish service
+> มีแล้วใน `backend/app/` (ดูหัวข้อ 1 และ 2)
 > Unit tests ของ engine ใช้ Python + pytest ตามแผน backend (FastAPI) ใน `memory-bank/standards/tech-stack.md`
 
 ---
 
 ## Functions ที่ต้อง Test
 
-### 1. Roster Import — `parse_roster(csv_text) -> RosterResult` 🟡
+### 1. Roster Import — `parse_roster(csv_text) -> RosterResult` ✅
 
 เป้าหมายของ WS-03 lab (Simple Construction — กฎเยอะแต่ตื้น ทำเสร็จใน 60 นาทีได้)
 
 | กฎ | Test | สถานะ |
 |---|---|---|
-| ที่อยู่ใน roster กับที่อยู่ตอน login ของคนเดียวกันต้อง match (FR-AUTH-03) | `test_roster_address_and_login_address_resolve_to_the_same_person` | 🟡 |
-| ตัวพิมพ์ใหญ่และ `+tag` ถูกตัดทิ้งตอน normalise | `test_case_and_plus_tags_are_folded_away` | 🟡 |
-| อีเมลที่ไม่สมเหตุสมผลถูกปฏิเสธ ไม่ถูกเก็บ | `test_implausible_addresses_are_rejected` | 🟡 |
-| Header match ได้ไม่ว่าตัวพิมพ์หรือช่องว่างรอบ ๆ (FR-CLASS-01, US-CLASS-01 AC1) | `test_header_matching_ignores_case_and_surrounding_space` | 🟡 |
-| **แถวผิด 1 แถว → ปฏิเสธทั้งไฟล์ (FR-CLASS-02)** | `test_one_bad_row_rejects_the_entire_file` | 🟡 |
-| Error บอกเลขแถวตามที่ Excel แสดง — แถว 42 ในไฟล์ 100 แถว (US-CLASS-01 AC2) | `test_a_rejected_file_names_the_row_that_broke_it` | 🟡 |
-| รายงาน error ทุกข้อพร้อมกัน ไม่ใช่ทีละรอบ upload | `test_every_error_is_reported_at_once_rather_than_one_upload_at_a_time` | 🟡 |
-| ตรวจอีเมลซ้ำ **หลัง** normalise (FR-CLASS-03) | `test_duplicate_emails_are_caught_after_normalisation_not_before` | 🟡 |
-| `group_name` ว่าง → error ไม่ใช่ค่า default | `test_an_empty_group_name_is_an_error_not_a_default` | 🟡 |
-| บรรทัดว่างถูกข้าม และเลขแถวถัดไปยังตรงกับ Excel | `test_blank_lines_are_skipped_without_shifting_row_numbers` | 🟡 |
-| ขาด header ที่บังคับ → หยุด import ทันที | `test_a_missing_required_header_stops_the_import_immediately` | 🟡 |
-| Cell ที่ Excel จะ execute ถูกทำให้ไร้พิษ (FR-SEC-04) | `test_cells_that_excel_would_execute_are_defused` | 🟡 |
-| สูตรใน group name ผ่าน import ออกมาเป็นข้อความเฉย ๆ | `test_a_formula_in_a_group_name_survives_import_as_inert_text` | 🟡 |
+| ที่อยู่ใน roster กับที่อยู่ตอน login ของคนเดียวกันต้อง match (FR-AUTH-03) | `test_roster_address_and_login_address_resolve_to_the_same_person` | ✅ |
+| ตัวพิมพ์ใหญ่และ `+tag` ถูกตัดทิ้งตอน normalise | `test_case_and_plus_tags_are_folded_away` | ✅ |
+| อีเมลที่ไม่สมเหตุสมผลถูกปฏิเสธ ไม่ถูกเก็บ | `test_implausible_addresses_are_rejected` | ✅ |
+| Header match ได้ไม่ว่าตัวพิมพ์หรือช่องว่างรอบ ๆ (FR-CLASS-01, US-CLASS-01 AC1) | `test_header_matching_ignores_case_and_surrounding_space` | ✅ |
+| **แถวผิด 1 แถว → ปฏิเสธทั้งไฟล์ (FR-CLASS-02)** | `test_one_bad_row_rejects_the_entire_file` | ✅ |
+| Error บอกเลขแถวตามที่ Excel แสดง — แถว 42 ในไฟล์ 100 แถว (US-CLASS-01 AC2) | `test_a_rejected_file_names_the_row_that_broke_it` | ✅ |
+| รายงาน error ทุกข้อพร้อมกัน ไม่ใช่ทีละรอบ upload | `test_every_error_is_reported_at_once_rather_than_one_upload_at_a_time` | ✅ |
+| ตรวจอีเมลซ้ำ **หลัง** normalise (FR-CLASS-03) | `test_duplicate_emails_are_caught_after_normalisation_not_before` | ✅ |
+| `group_name` ว่าง → error ไม่ใช่ค่า default | `test_an_empty_group_name_is_an_error_not_a_default` | ✅ |
+| บรรทัดว่างถูกข้าม และเลขแถวถัดไปยังตรงกับ Excel | `test_blank_lines_are_skipped_without_shifting_row_numbers` | ✅ |
+| ขาด header ที่บังคับ → หยุด import ทันที | `test_a_missing_required_header_stops_the_import_immediately` | ✅ |
+| Cell ที่ Excel จะ execute ถูกทำให้ไร้พิษ (FR-SEC-04) | `test_cells_that_excel_would_execute_are_defused` | ✅ |
+| สูตรใน group name ผ่าน import ออกมาเป็นข้อความเฉย ๆ | `test_a_formula_in_a_group_name_survives_import_as_inert_text` | ✅ |
 
-### 2. Publish service — `publish(assignment_id)` (ใช้ `AssignmentRepo`) 🟡
+### 2. Publish service — `publish(assignment_id)` (ใช้ `AssignmentRepo`) ✅
 
 Service บาง ๆ ที่อ่าน roster จาก repo → เรียก Pairing Engine → บันทึก `pair_assignment` กลับลง repo
 เป็นจุดที่ใช้ Fake Repository ของ harness
 
 | กฎ | Test | สถานะ |
 |---|---|---|
-| จำนวน pair ที่สร้างเท่ากับยอดที่ preview ไว้ (US-PUBLISH-01 AC1) | `test_publish_generates_exactly_the_previewed_number_of_pairs` | 🟡 |
+| จำนวน pair ที่สร้างเท่ากับยอดที่ preview ไว้ (US-PUBLISH-01 AC1) | `test_publish_generates_exactly_the_previewed_number_of_pairs` | ✅ |
 
 ### 3. Scoring Engine ⬜
 
@@ -136,12 +137,21 @@ Service บาง ๆ ที่อ่าน roster จาก repo → เรี�
 | มีปุ่มหลัก Start comparing (`data-testid="cta-primary"`) | `landing page > renders the main CTA with its test id` | ✅ |
 | มี placeholder ของ Comparison workspace | `landing page > renders a placeholder for the main feature` | ✅ |
 
-### 6. E2E smoke (`tests/e2e/smoke.spec.ts`, Playwright) 🟡
+### 6. E2E smoke (`tests/e2e/smoke.spec.ts`, Playwright) ✅
 
 | กฎ | Test | สถานะ |
 |---|---|---|
-| หน้าแรกโหลดได้ title มี "Pairwise" และเห็น navigation | `homepage loads correctly` | 🟡 |
-| ปุ่ม Start comparing มองเห็นได้ | `main CTA is visible` | 🟡 |
+| หน้าแรกโหลดได้ title มี "Pairwise" และเห็น navigation | `homepage loads correctly` | ✅ |
+| ปุ่ม Start comparing มองเห็นได้ | `main CTA is visible` | ✅ |
+
+### 7. E2E roster workflow (`tests/e2e/specs/roster.spec.ts`, Playwright) ✅
+
+ใช้ backend จริง (FastAPI, ผ่าน `server.mjs` proxy ไปที่ container `backend-test`) ไม่ใช่ mock
+
+| กฎ | Test | สถานะ |
+|---|---|---|
+| Import roster ที่ถูกต้อง แล้ว publish preview ได้จำนวนคู่ที่ถูกต้อง | `imports a valid roster and publishes its comparison preview` | ✅ |
+| Roster ที่ผิดถูกปฏิเสธ ไม่โชว์ success state | `rejects an invalid roster without showing a success state` | ✅ |
 
 ---
 
@@ -161,12 +171,13 @@ Service บาง ๆ ที่อ่าน roster จาก repo → เรี�
 
 | ส่วน | ไฟล์ | สถานะ |
 |---|---|---|
-| Fake Repository | `tests/fakes/fake_assignment_repo.py` — `FakeAssignmentRepo` implement `AssignmentRepo` (Protocol) เก็บข้อมูลใน dict | 🟡 |
-| Factories | `tests/factories.py` — `make_roster_row(**overrides)`, `make_roster_csv(rows)`, `make_roster(group_sizes)` | 🟡 |
-| Fixtures | `tests/conftest.py` — `valid_csv`, `csv_with_bad_row_42` | 🟡 |
-| Unit tests | `tests/unit/test_roster_import.py`, `tests/unit/test_publish.py` | 🟡 |
+| Fake Repository | `tests/fakes/fake_assignment_repo.py` — `FakeAssignmentRepo` implement `AssignmentRepo` (Protocol) เก็บข้อมูลใน dict | ✅ |
+| Factories | `tests/factories.py` — `make_roster_row(**overrides)`, `make_roster_csv(rows)`, `make_roster(group_sizes)` | ✅ |
+| Fixtures | `tests/conftest.py` — `valid_csv`, `csv_with_bad_row_42` | ✅ |
+| Unit tests | `tests/unit/test_roster_import.py`, `tests/unit/test_publish.py` | ✅ |
 | Frontend tests | `src/App.test.tsx` (รันด้วย `bun test ./src`) | ✅ |
-| E2E | `tests/e2e/smoke.spec.ts` + `playwright.config.ts` (baseURL `http://localhost:5173`) | 🟡 |
+| E2E | `tests/e2e/smoke.spec.ts` + `tests/e2e/specs/roster.spec.ts` + `playwright.config.ts` (baseURL `http://localhost:5173`) | ✅ |
+| Docker e2e backend | `backend/Dockerfile` + `compose.test.yaml` service `backend-test` — `app-test`'s `server.mjs` proxies `/api/rosters/*` to it via `BACKEND_URL` | ✅ |
 
 ---
 
@@ -186,6 +197,7 @@ Service บาง ๆ ที่อ่าน roster จาก repo → เรี�
 | คำสั่ง | ผล | วันที่ |
 |---|---|---|
 | `bun run test` | 4 pass, 0 fail — 34ms (ต่ำกว่างบ 10 วินาที) | 14-Sep-2026 |
-| `pytest -q` | _(ยังไม่มี test)_ | |
-| `bunx playwright test` | _(ยังไม่ได้เขียน smoke.spec.ts)_ | |
+| `pytest -q` | 15 pass, 0 fail — 0.07s | 15-Sep-2026 |
+| `bunx playwright test` (local, Vite dev + uvicorn) | 4 pass, 0 fail — 1.9s | 15-Sep-2026 |
+| `docker compose -f compose.test.yaml --profile e2e up e2e --build --abort-on-container-exit --exit-code-from e2e` | 4 pass, 0 fail, exit code 0 | 15-Sep-2026 |
 | Coverage → `docs/coverage/` | _(ยังไม่ได้รัน)_ | |

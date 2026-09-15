@@ -1,23 +1,42 @@
 import { useState } from "react";
-import { parseRoster, publishRoster, type RosterRow } from "../domain/roster";
+import { importRoster as importRosterFromApi, previewRoster } from "../lib/api";
+import type { RosterRow } from "../domain/roster";
 
 const EXAMPLE_ROSTER = "email,group_name\nstudent@uni.ac.th,Aurora";
+const API_UNREACHABLE_ERROR = "Could not reach the roster API. Is the backend running?";
 
 export function FeaturePlaceholder() {
   const [csvText, setCsvText] = useState(EXAMPLE_ROSTER);
   const [rows, setRows] = useState<RosterRow[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [publishedCount, setPublishedCount] = useState<number | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
 
-  function importRoster() {
-    const result = parseRoster(csvText);
-    setRows(result.rows);
-    setErrors(result.errors);
-    setPublishedCount(null);
+  async function importRoster() {
+    setIsBusy(true);
+    try {
+      const result = await importRosterFromApi(csvText);
+      setRows(result.rows);
+      setErrors(result.errors);
+      setPublishedCount(null);
+    } catch {
+      setRows([]);
+      setErrors([API_UNREACHABLE_ERROR]);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
-  function publish() {
-    setPublishedCount(publishRoster(rows).length);
+  async function publish() {
+    setIsBusy(true);
+    try {
+      const assignments = await previewRoster(rows);
+      setPublishedCount(assignments.length);
+    } catch {
+      setErrors([API_UNREACHABLE_ERROR]);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   return (
@@ -50,7 +69,8 @@ export function FeaturePlaceholder() {
         data-testid="import-roster"
         type="button"
         onClick={importRoster}
-        className="mt-3 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+        disabled={isBusy}
+        className="mt-3 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
         Import roster
       </button>
@@ -67,7 +87,8 @@ export function FeaturePlaceholder() {
             data-testid="publish-roster"
             type="button"
             onClick={publish}
-            className="ml-3 font-semibold underline"
+            disabled={isBusy}
+            className="ml-3 font-semibold underline disabled:opacity-50"
           >
             Publish preview
           </button>
