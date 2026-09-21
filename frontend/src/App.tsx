@@ -1,159 +1,138 @@
-import React, { useEffect, useState } from 'react'
-import { createClassroom, getClassrooms, getHealth } from './api'
+import { useEffect, useRef, useState } from 'react'
+import { createClassroom, getClassrooms, getHealth, getMe, importRoster, inviteInstructor, removeInstructor, setCredential, type Classroom, type CurrentUser } from './api'
+import { GoogleSignIn } from './GoogleSignIn'
+import { AssignmentWorkspace } from './AssignmentWorkspace'
+import { GroupReassignment } from './GroupReassignment'
+import { useLanguage } from './i18n'
+
+const demo = import.meta.env.VITE_AUTH_MODE === 'mock'
 
 export default function App() {
-  const [health, setHealth] = useState<string>('loading...')
-  const [classrooms, setClassrooms] = useState<any[]>([])
+  const { language, setLanguage, t } = useLanguage()
+  const sessionTimer = useRef<number | null>(null)
+  const [health, setHealth] = useState('loading')
+  const [classrooms, setClassrooms] = useState<Classroom[]>([])
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [newClassroom, setNewClassroom] = useState('')
+  const [error, setError] = useState('')
+  const [rosterStatus, setRosterStatus] = useState<Record<number, string>>({})
+  const [instructorInput, setInstructorInput] = useState('')
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
-    async function load() {
-      const healthData = await getHealth()
-      setHealth(healthData?.status ?? 'offline')
-      setClassrooms(await getClassrooms())
-    }
-    load()
+    getHealth().then((data) => setHealth(data.status)).catch(() => setHealth('offline'))
+    return () => { if (sessionTimer.current != null) window.clearTimeout(sessionTimer.current) }
   }, [])
 
-  async function handleCreateClassroom() {
-    if (!newClassroom.trim()) return
-    const classroom = await createClassroom(newClassroom.trim())
-    setClassrooms((current) => [...current, classroom])
-    setNewClassroom('')
+  function signOut(message = '') {
+    if (sessionTimer.current != null) window.clearTimeout(sessionTimer.current)
+    sessionTimer.current = null
+    setCredential('')
+    setCurrentUser(null)
+    setClassrooms([])
+    setSelectedId(null)
+    setError(message)
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="bg-white border-b border-slate-200">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-blue-700 font-semibold text-xl">PairEval</div>
-            <div className="text-slate-500 text-sm">Pairwise evaluation for fair student scoring</div>
-          </div>
-          <nav className="flex flex-wrap gap-4 text-slate-600">
-            <a href="#features" className="hover:text-slate-900">Features</a>
-            <a href="#values" className="hover:text-slate-900">Why PairEval</a>
-            <a href="#cta" className="hover:text-slate-900">Get Started</a>
-          </nav>
-        </div>
-      </header>
+  function scheduleSessionEnd(token: string) {
+    if (sessionTimer.current != null) window.clearTimeout(sessionTimer.current)
+    if (demo) return
+    let delay = 55 * 60 * 1000
+    try {
+      const payload = JSON.parse(window.atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: number }
+      if (typeof payload.exp === 'number') delay = Math.max(0, payload.exp * 1000 - Date.now() - 30_000)
+    } catch { /* Server validates the token. */ }
+    sessionTimer.current = window.setTimeout(() => signOut(language === 'th' ? 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง' : 'Session expired. Sign in again.'), delay)
+  }
 
-      <main className="max-w-5xl mx-auto px-6 py-12">
-        <section className="rounded-3xl bg-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold text-slate-900">Backend prototype connected</h1>
-              <p className="mt-3 text-slate-600">This frontend can now call the PairEval backend prototype for classroom creation and health checks.</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-600">
-              Backend status: <span className="font-semibold text-slate-900">{health}</span>
-            </div>
-          </div>
+  async function handleSignIn(token: string) {
+    setCredential(token)
+    try {
+      const [user, availableClassrooms] = await Promise.all([getMe(), getClassrooms()])
+      setCurrentUser(user)
+      setClassrooms(availableClassrooms)
+      setSelectedId(availableClassrooms.find((item) => item.name === 'PairEval Demo')?.id ?? availableClassrooms[0]?.id ?? null)
+      setError('')
+      scheduleSessionEnd(token)
+    } catch {
+      signOut(language === 'th' ? 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง' : 'Sign-in could not be verified. Please try again.')
+    }
+  }
 
-          <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-4">
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-                <h2 className="text-xl font-semibold text-slate-900">Create a classroom</h2>
-                <div className="mt-4 flex gap-3">
-                  <input
-                    value={newClassroom}
-                    onChange={(event) => setNewClassroom(event.target.value)}
-                    placeholder="Classroom name"
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                  <button
-                    onClick={handleCreateClassroom}
-                    className="rounded-2xl bg-blue-600 px-5 py-3 text-white hover:bg-blue-700"
-                  >
-                    Create
-                  </button>
-                </div>
-              </div>
+  async function handleCreateClassroom() {
+    if (!currentUser?.is_instructor || !newClassroom.trim()) return
+    try {
+      const classroom = await createClassroom(newClassroom.trim())
+      setClassrooms((items) => [...items, classroom])
+      setSelectedId(classroom.id)
+      setNewClassroom('')
+      setError('')
+    } catch { setError(language === 'th' ? 'สร้างห้องเรียนไม่สำเร็จ' : 'Could not create the classroom.') }
+  }
 
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-                <h2 className="text-xl font-semibold text-slate-900">Classrooms</h2>
-                <div className="mt-4 space-y-3">
-                  {classrooms.length ? (
-                    classrooms.map((classroom) => (
-                      <div key={classroom.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <div className="font-medium text-slate-900">{classroom.name}</div>
-                        <div className="text-slate-500 text-sm">ID: {classroom.id}</div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-slate-500">No classrooms yet.</div>
-                  )}
-                </div>
-              </div>
-            </div>
+  async function handleRosterFile(classroomId: number, file: File) {
+    try {
+      const result = await importRoster(classroomId, await file.text())
+      setRosterStatus((items) => ({ ...items, [classroomId]: result.errors.length ? result.errors.join('; ') : language === 'th' ? 'นำเข้านักศึกษา ' + result.imported + ' คนแล้ว' : 'Imported ' + result.imported + ' students.' }))
+    } catch { setRosterStatus((items) => ({ ...items, [classroomId]: language === 'th' ? 'นำเข้า CSV ไม่สำเร็จ' : 'Roster import failed.' })) }
+  }
 
-            <div className="rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-950 to-blue-900 p-6 text-white shadow-xl">
-              <h2 className="text-xl font-semibold">PairEval backend prototype</h2>
-              <p className="mt-4 text-slate-300">The frontend now includes a lightweight API client and a classroom create flow that hits the FastAPI backend at <code className="rounded bg-slate-800 px-2 py-1 text-sm">http://localhost:8000</code>.</p>
-              <p className="mt-4 text-slate-300">Next steps are implementing student import, group pairing, and evaluation pages.</p>
-            </div>
-          </div>
-        </section>
+  async function changeInstructor(classroomId: number, email: string, remove: boolean) {
+    try {
+      const updated = remove ? await removeInstructor(classroomId, email) : await inviteInstructor(classroomId, email)
+      setClassrooms((items) => items.map((item) => item.id === classroomId ? updated : item))
+      setInstructorInput('')
+      setError('')
+    } catch (problem) { setError(problem instanceof Error ? problem.message : language === 'th' ? 'แก้ไขรายชื่ออาจารย์ไม่สำเร็จ' : 'Could not update instructors.') }
+  }
 
-        <section id="features" className="mt-16 grid gap-8 sm:grid-cols-2">
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">Classroom & assignment workflow</h2>
-            <p className="mt-3 text-slate-600">Create classrooms, import students by CSV, assign instructors, and define group/individual evaluation criteria.</p>
-          </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">Pair generation engine</h2>
-            <p className="mt-3 text-slate-600">Generate balanced pairwise comparisons with coverage targets, self-evaluation exclusion, and reassign support.</p>
-          </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">Rolling & final scoring</h2>
-            <p className="mt-3 text-slate-600">Compute normalized pairwise scores, partial credit, and instructor-weighted votes for group and individual evaluations.</p>
-          </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">Reports & export</h2>
-            <p className="mt-3 text-slate-600">View coverage reports, pairwise evaluations, and export results to CSV/Excel for instructors.</p>
-          </div>
-        </section>
+  const selected = classrooms.find((item) => item.id === selectedId)
+  const canManage = Boolean(currentUser?.is_instructor && selected?.instructor_emails.split(',').includes(currentUser.email))
 
-        <section id="values" className="mt-16 rounded-3xl border border-slate-200 bg-slate-800 p-10 text-white">
-          <div className="grid gap-6 sm:grid-cols-3">
-            <div>
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Fairness</p>
-              <p className="mt-3 text-lg font-semibold">Reduce bias with pairwise comparisons, not direct numeric grading.</p>
-            </div>
-            <div>
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Visibility</p>
-              <p className="mt-3 text-lg font-semibold">Students see rolling scores while anonymity and raw reports remain instructor-only.</p>
-            </div>
-            <div>
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Control</p>
-              <p className="mt-3 text-lg font-semibold">Instructor-defined weighting, deadlines, and reassignments keep workflows manageable.</p>
-            </div>
-          </div>
-        </section>
+  return <div className="app-shell">
+    <aside className="sidebar">
+      <div className="brand"><span className="brand-mark">P<span>●</span></span><span>PairEval<small>{language === 'th' ? 'ระบบประเมินแบบเปรียบเทียบคู่' : 'Pairwise evaluation'}</small></span></div>
+      <div className="sidebar-label">{t('Classrooms')} <span>{classrooms.length.toString().padStart(2, '0')}</span></div>
+      <nav aria-label={t('Classrooms')} className="classroom-list">
+        {classrooms.map((item, index) => <button key={item.id} type="button" className={'classroom-link ' + (selectedId === item.id ? 'active' : '')} onClick={() => { setSelectedId(item.id); setShowSettings(false) }}>
+          <span className="classroom-index">{String(index + 1).padStart(2, '0')}</span><span>{item.name}</span><span className="nav-arrow">↗</span>
+        </button>)}
+        {!currentUser && <p className="sidebar-hint">{language === 'th' ? 'เข้าสู่ระบบเพื่อดูห้องเรียน' : 'Sign in to view classrooms'}</p>}
+        {currentUser && classrooms.length === 0 && <p className="sidebar-hint">{language === 'th' ? 'ยังไม่มีห้องเรียน' : 'No classrooms yet'}</p>}
+      </nav>
+      {currentUser?.is_instructor && <form className="create-classroom" onSubmit={(event) => { event.preventDefault(); void handleCreateClassroom() }}>
+        <label htmlFor="new-classroom">{language === 'th' ? 'เพิ่มห้องเรียน' : 'Add classroom'}</label>
+        <div><input id="new-classroom" value={newClassroom} onChange={(event) => setNewClassroom(event.target.value)} placeholder={language === 'th' ? 'ชื่อห้องเรียน' : 'Classroom name'} /><button type="submit" aria-label={language === 'th' ? 'สร้างห้องเรียน' : 'Create classroom'}>＋</button></div>
+      </form>}
+      <div className="sidebar-bottom"><span className={'status-dot ' + (health === 'ok' ? 'online' : '')} />{language === 'th' ? 'สถานะระบบ' : 'System status'}: {health}</div>
+    </aside>
 
-        <section id="cta" className="mt-16 rounded-3xl border border-slate-200 bg-white p-10 shadow-sm">
-          <h2 className="text-2xl font-semibold text-slate-900">Build a better student evaluation experience</h2>
-          <p className="mt-4 text-slate-600">This project is a platform starter for PairEval: login + classroom creation, pairwise assessment, and reporting.</p>
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <h3 className="font-semibold text-slate-900">Instructor</h3>
-              <p className="mt-2 text-slate-600">Create assignments, import students, manage weights, and review reports.</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <h3 className="font-semibold text-slate-900">Student</h3>
-              <p className="mt-2 text-slate-600">Complete pairwise evaluations, save drafts, and track rolling scores.</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <h3 className="font-semibold text-slate-900">Admin</h3>
-              <p className="mt-2 text-slate-600">Manage classrooms, reassign groups, and regenerate pairs.</p>
-            </div>
+    <div className="content-shell">
+      <header className="topbar"><div className="topbar-crumb">PAIR<span> / </span>{selected?.name || (language === 'th' ? 'ภาพรวม' : 'Overview')}</div><div className="topbar-actions">
+        <div className="language-switch" role="group" aria-label="Language"><button type="button" className={language === 'th' ? 'selected' : ''} onClick={() => setLanguage('th')}>TH</button><button type="button" className={language === 'en' ? 'selected' : ''} onClick={() => setLanguage('en')}>EN</button></div>
+        {currentUser && <button type="button" className="signout" onClick={() => signOut()}>{language === 'th' ? 'ออกจากระบบ' : 'Sign out'} ↗</button>}
+      </div></header>
+
+      <main className="main-content">
+        {error && <p role="status" className="notice error">{error}</p>}
+        {!currentUser ? <section className="welcome-layout">
+          <div className="welcome-copy"><span className="eyebrow">THE PAIRWISE REVIEW WORKSPACE</span><h1>{language === 'th' ? <>ประเมินอย่าง<br /><em>เป็นธรรม</em> ด้วย<br />มุมมองที่หลากหลาย</> : <>A fairer view<br />of every <em>contribution.</em></>}</h1><p>{language === 'th' ? 'เปรียบเทียบผลงานเป็นคู่ ติดตามความคืบหน้า และดูคะแนนในพื้นที่เดียว' : 'Compare work in pairs, track progress, and review scores in one place.'}</p></div>
+          <div className="login-panel"><div className="panel-number">01 / ACCESS</div><h2>{language === 'th' ? 'เข้าสู่พื้นที่การเรียนรู้' : 'Enter your workspace'}</h2><p>{language === 'th' ? 'เลือกบทบาทเพื่อทดลองระบบด้วยข้อมูลตัวอย่าง' : 'Choose a role to explore the sample workspace.'}</p>
+            {demo ? <div className="demo-options"><button type="button" className="demo-option" onClick={() => void handleSignIn('mock:teacher@example.edu')}><span className="role-icon">T</span><span><strong>{language === 'th' ? 'ทดลองเป็นอาจารย์' : 'Explore as instructor'}</strong><small>teacher@example.edu</small></span><span>↗</span></button><button type="button" className="demo-option" onClick={() => void handleSignIn('mock:student1@example.edu')}><span className="role-icon student">S</span><span><strong>{language === 'th' ? 'ทดลองเป็นนักศึกษา' : 'Explore as student'}</strong><small>student1@example.edu</small></span><span>↗</span></button></div> : <GoogleSignIn onSignIn={handleSignIn} />}
+            {demo && <p className="demo-note">{language === 'th' ? 'โหมดสาธิต · ข้อมูลอยู่ใน PostgreSQL ภายใน Docker' : 'Demo mode · Data is stored in PostgreSQL inside Docker'}</p>}
           </div>
-        </section>
+        </section> : <>
+          <div className="page-heading"><div><div className="eyebrow">{language === 'th' ? 'พื้นที่การเรียนรู้' : 'YOUR WORKSPACE'} / {currentUser.is_instructor ? (language === 'th' ? 'อาจารย์' : 'INSTRUCTOR') : (language === 'th' ? 'นักศึกษา' : 'STUDENT')}</div><h1>{selected?.name || t('Classrooms')}</h1><p>{language === 'th' ? 'จัดการงานประเมิน ตอบแบบประเมิน และติดตามคะแนน' : 'Manage assignments, complete evaluations, and track scores.'}</p></div><div className="user-badge"><span>{currentUser.email.slice(0, 1).toUpperCase()}</span><div><strong>{currentUser.is_instructor ? (language === 'th' ? 'อาจารย์' : 'Instructor') : t('Student')}</strong><small>{currentUser.email}</small></div></div></div>
+          {selected ? <div className="workspace-grid"><div className="workspace-main"><div className="section-heading"><span className="section-count">01</span><h2>{t('Assignments')}</h2><span className="heading-rule" /></div><AssignmentWorkspace key={selected.id} classroomId={selected.id} isInstructor={canManage} email={currentUser.email} /></div>
+            <aside className="workspace-side"><div className="info-panel"><span className="panel-number">CLASSROOM / {String(selected.id).padStart(2, '0')}</span><h3>{language === 'th' ? 'รายละเอียดห้องเรียน' : 'Classroom details'}</h3><div className="info-row"><span>{language === 'th' ? 'รหัสห้อง' : 'Class ID'}</span><strong>#{selected.id}</strong></div><div className="info-row"><span>{language === 'th' ? 'อาจารย์' : 'Instructors'}</span><strong>{selected.instructor_emails.split(',').filter(Boolean).length}</strong></div></div>
+              {canManage && <div className="side-tools"><button type="button" className="tools-toggle" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings}>{language === 'th' ? 'จัดการห้องเรียน' : 'Manage classroom'} <span>{showSettings ? '−' : '＋'}</span></button>{showSettings && <div className="tools-content"><label>{language === 'th' ? 'นำเข้ารายชื่อนักศึกษา (CSV)' : 'Import student roster (CSV)'}<input type="file" accept=".csv,text/csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleRosterFile(selected.id, file) }} /></label>{rosterStatus[selected.id] && <p role="status">{rosterStatus[selected.id]}</p>}<div className="instructor-list"><strong>{language === 'th' ? 'อาจารย์ในห้อง' : 'Classroom instructors'}</strong>{selected.instructor_emails.split(',').filter(Boolean).map((email) => <div key={email}><span>{email}</span><button type="button" onClick={() => void changeInstructor(selected.id, email, true)}>{t('Remove')}</button></div>)}</div><form onSubmit={(event) => { event.preventDefault(); void changeInstructor(selected.id, instructorInput, false) }}><input type="email" aria-label={language === 'th' ? 'อีเมลอาจารย์' : 'Instructor email'} placeholder={language === 'th' ? 'อีเมลอาจารย์ที่อนุมัติ' : 'Approved instructor email'} value={instructorInput} onChange={(event) => setInstructorInput(event.target.value)} /><button type="submit">{language === 'th' ? 'เชิญ' : 'Invite'}</button></form><GroupReassignment classroomId={selected.id} isInstructor /></div>}</div>}
+              {!canManage && <GroupReassignment classroomId={selected.id} isInstructor={false} />}
+              <div className="side-quote"><span>“</span><p>{language === 'th' ? 'ทุกความคิดเห็นช่วยให้เห็นภาพที่ครบขึ้น' : 'Every perspective makes the picture clearer.'}</p><small>PAIREVAL / 2026</small></div>
+            </aside></div> : <div className="empty-state">{language === 'th' ? 'เลือกห้องเรียนจากแถบด้านซ้าย' : 'Select a classroom from the sidebar.'}</div>}
+        </>}
       </main>
-
-      <footer className="border-t border-slate-200 bg-slate-50 py-8">
-        <div className="max-w-5xl mx-auto px-6 text-slate-500 text-sm">© {new Date().getFullYear()} PairEval — A fair student pairwise evaluation system.</div>
-      </footer>
+      <footer className="app-footer"><span>PAIR / EVAL © {new Date().getFullYear()}</span><span>{language === 'th' ? 'การประเมินที่เห็นทุกมุมมอง' : 'A clearer view of every contribution'}</span></footer>
     </div>
-  )
+  </div>
 }

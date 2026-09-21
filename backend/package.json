@@ -2,6 +2,9 @@
   "name": "pairwise-evaluation-backend",
   "private": true,
   "scripts": {
-    "dev": "py -m uvicorn app.main:app --reload"
+    "dev": "py -m uvicorn app.main:app --reload",
+    "test": ".venv\\Scripts\\python.exe -m pytest",
+    "test:container": "node ../frontend/e2e/compose-run.mjs unit",
+    "lint": "py -m compileall -q app tests"
   }
 }
