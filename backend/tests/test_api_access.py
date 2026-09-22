@@ -76,6 +76,23 @@ class ApiAccessTests(unittest.TestCase):
         self.sign_in("outsider@example.edu")
         self.assertEqual(self.client.get("/classrooms/").json(), [])
 
+    def test_instructor_adds_student_to_group_by_email(self) -> None:
+        self.sign_in("teacher@example.edu", is_instructor=True)
+        classroom_id = self.client.post("/classrooms/", json={"name": "Course"}).json()["id"]
+        response = self.client.post("/students/", json={
+            "email": "STUDENT@example.edu", "classroom_id": classroom_id, "group_name": "Team A",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["email"], "student@example.edu")
+        self.assertEqual(response.json()["group_name"], "Team A")
+        self.assertIsNotNone(response.json()["group_id"])
+        self.assertEqual(self.client.get("/groups/", params={"classroom_id": classroom_id}).json()[0]["name"], "Team A")
+        self.assertEqual(self.client.post("/students/", json={
+            "email": "student@example.edu", "classroom_id": classroom_id, "group_name": "Team A",
+        }).status_code, 409)
+        self.sign_in("student@example.edu")
+        self.assertEqual(self.client.get("/me").json()["classroom_ids"], [classroom_id])
+
     def test_student_cannot_see_unpublished_assignment(self) -> None:
         self.sign_in("teacher@example.edu", is_instructor=True)
         classroom_id = self.client.post("/classrooms/", json={"name": "Course"}).json()["id"]

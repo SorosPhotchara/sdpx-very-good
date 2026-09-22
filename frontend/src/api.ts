@@ -114,6 +114,14 @@ export async function importRoster(classroomId: number, csvText: string): Promis
   return readJson<RosterImportResult>(response)
 }
 
+export async function addStudent(classroomId: number, email: string, groupName: string): Promise<Student> {
+  const response = await fetch(`${API_BASE}/students/`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ classroom_id: classroomId, email, group_name: groupName }),
+  })
+  return readJson<Student>(response)
+}
+
 export async function getAssignments(classroomId: number): Promise<Assignment[]> {
   const response = await fetch(`${API_BASE}/assignments/?classroom_id=${classroomId}`, { headers: authHeaders() })
   return readJson<Assignment[]>(response)

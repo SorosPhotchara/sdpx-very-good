@@ -36,6 +36,10 @@ test('instructor creates a classroom and imports its roster', async ({ page }) =
     ].join('\n')),
   })
   await expect(page.getByText('Imported 6 students.')).toBeVisible()
+  await page.getByLabel('Student Google email').fill('seven@example.edu')
+  await page.getByLabel('Group name').fill('Gamma')
+  await page.getByRole('button', { name: 'Add student', exact: true }).click()
+  await expect(page.getByText('Added seven@example.edu to Gamma.')).toBeVisible()
 })
 
 test('student saves and submits a pairwise evaluation', async ({ page }) => {

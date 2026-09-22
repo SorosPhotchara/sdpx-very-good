@@ -60,6 +60,23 @@ test("roster import sends CSV text only for the selected classroom", async () =>
   })
 })
 
+test("adding one student sends their email and group to the selected classroom", async () => {
+  api.setCredential("test-id-token")
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, "http://localhost:8000/students/")
+    assert.equal(options.method, "POST")
+    assert.equal(options.headers.Authorization, "Bearer test-id-token")
+    assert.deepEqual(JSON.parse(options.body), {
+      classroom_id: 7, email: "student@example.edu", group_name: "Team A",
+    })
+    return new Response(JSON.stringify({
+      id: 3, classroom_id: 7, email: "student@example.edu", group_name: "Team A", group_id: 2,
+    }), { status: 200 })
+  }
+  const student = await api.addStudent(7, "student@example.edu", "Team A")
+  assert.equal(student.group_id, 2)
+})
+
 test("draft save sends only changed choices and submit sends the saved page snapshot request", async () => {
   api.setCredential("test-id-token")
   let requests = 0

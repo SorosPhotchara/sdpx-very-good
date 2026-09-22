@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .. import crud, models, schemas
 from ..auth import Identity, approved_instructors, current_identity
@@ -109,7 +110,15 @@ def create_student(
     db: Session = Depends(get_db),
 ) -> models.Student:
     require_owner(student.classroom_id, identity, db)
-    return crud.create_student(db, student)
+    if db.query(models.Assignment.id).filter_by(classroom_id=student.classroom_id).filter(
+        models.Assignment.published_at.is_not(None)
+    ).first():
+        raise HTTPException(409, "Cannot add students after an assignment is published")
+    try:
+        return crud.create_student(db, student)
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(409, "Student email is already in this classroom") from error
 
 
 @router.get("/students/", response_model=list[schemas.Student])
