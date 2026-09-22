@@ -23,11 +23,13 @@ function SectionEditor({
   value: SectionDraft
   onChange: (value: SectionDraft) => void
 }) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const update = (changes: Partial<SectionDraft>) => onChange({ ...value, ...changes })
   const updateCriterion = (index: number, changes: Partial<CriterionDraft>) => {
     update({ criteria: value.criteria.map((item, current) => current === index ? { ...item, ...changes } : item) })
   }
+  const active = Number(value.score) > 0 || Number(value.participation) > 0
+  const totalWeight = value.criteria.reduce((total, item) => total + Number(item.weight || 0), 0)
 
   return <fieldset className="rounded-xl border border-slate-200 p-4 space-y-3">
     <legend className="font-medium">{title}</legend>
@@ -38,7 +40,7 @@ function SectionEditor({
       <input type="number" min="0" value={value.participation} onChange={(event) => update({ participation: event.target.value })} className="mt-1 block w-full border rounded p-2" />
     </label>
     <label className="block text-sm">{t('Deadline')}
-      <input type="datetime-local" value={value.deadline} onChange={(event) => update({ deadline: event.target.value })} className="mt-1 block w-full border rounded p-2" />
+      <input type="datetime-local" required={active} value={value.deadline} onChange={(event) => update({ deadline: event.target.value })} className="mt-1 block w-full border rounded p-2" />
     </label>
     {value.criteria.map((criterion, index) => <div key={index} className="flex flex-wrap gap-2 items-end">
       <label className="text-sm flex-1">{t('Criterion')}
@@ -49,6 +51,9 @@ function SectionEditor({
       </label>
       <button type="button" onClick={() => update({ criteria: value.criteria.filter((_, current) => current !== index) })} className="text-red-700 text-sm p-2">{t('Remove')}</button>
     </div>)}
+    {active && <p role="status" className={Math.abs(totalWeight - 100) < 0.001 ? 'text-sm text-green-700' : 'text-sm text-red-700'}>
+      {language === 'th' ? `น้ำหนักเกณฑ์รวม ${totalWeight}% / 100%` : `Criterion weights: ${totalWeight}% / 100%`}
+    </p>}
     <button type="button" onClick={() => update({ criteria: [...value.criteria, { name: '', weight: '' }] })} className="text-blue-700 text-sm">{t('Add criterion')}</button>
   </fieldset>
 }
@@ -80,6 +85,16 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault()
+    for (const [section, label] of [[group, t('Group evaluation')], [individual, t('Individual evaluation')]] as const) {
+      const active = Number(section.score) > 0 || Number(section.participation) > 0
+      const total = section.criteria.reduce((sum, item) => sum + Number(item.weight || 0), 0)
+      if (active && Math.abs(total - 100) >= 0.001) {
+        setStatus(language === 'th'
+          ? `น้ำหนักเกณฑ์${label}รวม ${total}% ต้องรวม 100%`
+          : `${label} weights total ${total}%; they must total 100%.`)
+        return
+      }
+    }
     setBusy(true)
     try {
     const setup: AssignmentSetup = {

@@ -40,6 +40,18 @@ test('instructor creates a classroom and imports its roster', async ({ page }) =
   await page.getByLabel('Group name').fill('Gamma')
   await page.getByRole('button', { name: 'Add student', exact: true }).click()
   await expect(page.getByText('Added seven@example.edu to Gamma.')).toBeVisible()
+
+  await page.locator('summary').filter({ hasText: 'Create assignment' }).click()
+  await page.getByLabel('Title').fill('New review')
+  const groupSection = page.getByRole('group', { name: 'Group evaluation' })
+  await groupSection.getByLabel('Deadline').fill(new Date(Date.now() + 2 * 86400_000).toISOString().slice(0, 16))
+  await groupSection.getByLabel('Weight %').fill('90')
+  await page.getByRole('button', { name: 'Create assignment' }).click()
+  await expect(page.getByText('Group evaluation weights total 90%; they must total 100%.')).toBeVisible()
+
+  await groupSection.getByLabel('Weight %').fill('100')
+  await page.getByRole('button', { name: 'Create assignment' }).click()
+  await expect(page.getByText('Assignment created.')).toBeVisible()
 })
 
 test('student saves and submits a pairwise evaluation', async ({ page }) => {
