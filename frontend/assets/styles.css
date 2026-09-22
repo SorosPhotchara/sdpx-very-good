@@ -36,8 +36,30 @@ button:disabled{cursor:not-allowed}
 .login-panel h2,.info-panel h3{font-weight:700}
 .demo-option strong{font-size:15px}
 .workspace-main,.workspace-side{line-height:1.65}
+.workspace-side,.workspace-side>*{min-width:0}
+.workspace-side .tools-content form:not(.add-student-form){display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.workspace-side .tools-content input{min-width:0;max-width:100%;margin-top:0}
+.workspace-side .tools-content select{min-width:0;max-width:100%}
+.workspace-side .instructor-list>div span{min-width:0;overflow-wrap:anywhere}
+@media(max-width:1000px){.workspace-side{grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));align-items:start}}
+.workspace-side .tools-content{min-width:0;grid-template-columns:minmax(0,1fr)}
+.group-reassignment{min-width:0;max-width:100%}
+.group-reassignment-controls{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.group-reassignment-controls select,.group-reassignment-controls button{width:100%;min-width:0}
 .confirm-panel{margin-top:14px;padding:15px 17px;border-left:4px solid #d58b45;background:#f9f1e6;color:#233a3a}
 .confirm-panel p{margin:0 0 12px;line-height:1.6}
 .confirm-panel>div{display:flex;gap:8px;flex-wrap:wrap}
 .confirm-panel button{border:1px solid #1d615b;background:#1d615b;color:#fff;padding:7px 13px;border-radius:3px}
 .confirm-panel button+button{background:transparent;color:#1d615b}
+.evaluation-pair{min-width:0;margin:0;padding:16px;border:1px solid #dce5df;border-radius:6px;background:#fbfcf9}
+.evaluation-pair legend{max-width:100%;padding:0 6px;font-weight:700;color:#315a55;overflow-wrap:anywhere}
+.pair-candidates{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;margin:3px 0 14px}
+.pair-candidates>span:first-child,.pair-candidates>span:last-child{min-width:0;padding:10px 12px;background:#e7f1eb;border-radius:4px;font-weight:700;overflow-wrap:anywhere}
+.pair-candidates>span:last-child{text-align:right;background:#f1ede4}
+.pair-versus{font-size:11px;font-weight:800;letter-spacing:.08em;color:#70817a}
+.choice-scale{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,112px),1fr));gap:6px}
+.choice-option{display:flex;align-items:center;justify-content:center;gap:7px;min-height:52px;padding:8px;border:1px solid #d9e2dc;border-radius:4px;background:#fff;color:#405651;text-align:center;line-height:1.35;cursor:pointer}
+.choice-option input{flex:none;width:16px;height:16px;margin:0;accent-color:#1d615b}
+.choice-option:has(input:checked){border-color:#1d615b;background:#e5f2e9;color:#163d39}
+.choice-option:focus-within{outline:3px solid #f0a44c;outline-offset:2px}
+.evaluation-pair:disabled .choice-option{cursor:default}

@@ -18,12 +18,16 @@ export function EvaluationWorkspace({ assignmentId, section }: { assignmentId: n
   }, [assignmentId, section])
 
   async function choose(pairId: number, choice: number) {
+    if (!page || busy) return
+    const previous = page
+    setPage({ ...page, pairs: page.pairs.map((pair) => pair.id === pairId ? { ...pair, draft_choice: choice } : pair) })
     setBusy(true)
     try {
       const updated = await saveEvaluationDraft(assignmentId, section, [{ pair_id: pairId, choice }])
       setPage(updated)
       setMessage(t('Draft saved.'))
     } catch (error) {
+      setPage(previous)
       setMessage(error instanceof Error ? error.message : 'Draft could not be saved.')
     } finally {
       setBusy(false)
@@ -52,12 +56,15 @@ export function EvaluationWorkspace({ assignmentId, section }: { assignmentId: n
       {page.submitted_at && <p className="text-slate-600">{t('Last submitted')}: {date(page.submitted_at)}</p>}
       {page.pairs.length === 0 && <p className="text-slate-500">{t('No pairs assigned for this section.')}</p>}
       <div className="mt-3 space-y-3">
-        {page.pairs.map((pair) => <fieldset key={pair.id} className="rounded-lg border p-3" disabled={!page.is_open || busy}>
-          <legend className="font-medium">{pair.criterion}: {pair.left} / {pair.right}</legend>
-          <div className="flex flex-wrap gap-3">
-            {choices.map((label, index) => <label key={label} className="inline-flex items-center gap-1">
+        {page.pairs.map((pair) => <fieldset key={pair.id} className="evaluation-pair" disabled={!page.is_open || busy}>
+          <legend>{pair.criterion}</legend>
+          <div className="pair-candidates" data-testid="pair-candidates">
+            <span>{pair.left}</span><span className="pair-versus" aria-hidden="true">VS</span><span>{pair.right}</span>
+          </div>
+          <div className="choice-scale">
+            {choices.map((label, index) => <label key={label} className="choice-option">
               <input type="radio" name={`pair-${pair.id}`} checked={pair.draft_choice === index + 1}
-              onChange={() => void choose(pair.id, index + 1)} />{t(label)}
+              onChange={() => void choose(pair.id, index + 1)} /><span>{t(label)}</span>
             </label>)}
           </div>
           {pair.submitted_choice != null && <p className="text-slate-500">{t('Last submitted')}: {t(choices[pair.submitted_choice - 1])}</p>}

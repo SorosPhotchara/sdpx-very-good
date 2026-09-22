@@ -33,10 +33,10 @@ export function GroupReassignment({ classroomId, isInstructor }: { classroomId: 
   }
 
   if (!isInstructor) return notifications.length ? <div className="mt-3 text-sm"><h3 className="font-medium">{t('Notifications')}</h3>{notifications.map((item) => <p key={item.id}>{item.message} ({date(item.created_at)})</p>)}</div> : null
-  return <details className="mt-3 rounded-xl border p-3 text-sm">
+  return <details className="group-reassignment mt-3 rounded-xl border p-3 text-sm">
     <summary className="cursor-pointer font-medium">{t('Move student between groups')}</summary>
     <button type="button" className="mt-2 text-blue-700" onClick={() => void refresh()}>{t('Refresh roster and history')}</button>
-    <div className="mt-2 flex flex-wrap gap-2">
+    <div className="group-reassignment-controls mt-2">
       <select aria-label={t('Choose student')} value={studentId} onChange={(event) => setStudentId(Number(event.target.value))} className="rounded border p-2"><option value={0}>{t('Choose student')}</option>{students.map((item) => <option key={item.id} value={item.id}>{item.email} ({item.group_name})</option>)}</select>
       <select aria-label={t('Target group')} value={groupId} onChange={(event) => setGroupId(Number(event.target.value))} className="rounded border p-2"><option value={0}>{t('Target group')}</option>{groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
       <button type="button" disabled={!studentId || !groupId || students.find((item) => item.id === studentId)?.group_id === groupId} onClick={() => setConfirmMove(true)} className="rounded bg-blue-600 px-3 py-2 text-white disabled:opacity-50">{t('Move')}</button>

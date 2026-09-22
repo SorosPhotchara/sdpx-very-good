@@ -54,6 +54,31 @@ test('instructor creates a classroom and imports its roster', async ({ page }) =
   await expect(page.getByText('Assignment created.')).toBeVisible()
 })
 
+test('classroom tools fit inside the sidebar at narrow widths', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'EN', exact: true }).click()
+  await page.getByRole('button', { name: /Explore as instructor/ }).click()
+  await page.getByRole('button', { name: /Manage classroom/ }).click()
+
+  await page.getByText('Move student between groups').click()
+  await expect(page.getByLabel('Choose student')).toBeVisible()
+
+  for (const width of [390, 720, 800, 1000, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    const overflowing = await page.getByTestId('workspace-side').evaluate((sidebar) => {
+      const bounds = sidebar.getBoundingClientRect()
+      return [...sidebar.querySelectorAll('input, select, button, .instructor-list, details')]
+        .filter((element) => {
+          const rect = element.getBoundingClientRect()
+          return rect.left < bounds.left - 1 || rect.right > bounds.right + 1
+        })
+        .map((element) => element.tagName.toLowerCase())
+    })
+    expect(overflowing, `sidebar controls overflow at ${width}px`).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), `page widens at ${width}px`).toBeLessThanOrEqual(width)
+  }
+})
+
 test('student saves and submits a pairwise evaluation', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'EN', exact: true }).click()
@@ -64,6 +89,11 @@ test('student saves and submits a pairwise evaluation', async ({ page }) => {
   await expect(page.getByText('Team project review')).toBeVisible()
 
   const groupEvaluation = page.getByRole('heading', { name: 'Group evaluation' }).locator('..')
+  for (const width of [390, 720]) {
+    await page.setViewportSize({ width, height: 900 })
+    await expect(groupEvaluation.getByTestId('pair-candidates').first()).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+  }
   await groupEvaluation.locator('input[type=radio]:not(:checked)').first().click()
   await expect(groupEvaluation.getByText('Draft saved.')).toBeVisible()
   await groupEvaluation.getByRole('button', { name: 'Submit saved answers' }).click()
@@ -72,4 +102,35 @@ test('student saves and submits a pairwise evaluation', async ({ page }) => {
   await page.getByRole('button', { name: 'Sign out' }).click()
   await page.reload()
   await expect(page.getByRole('button', { name: /Explore as student/ })).toBeVisible()
+})
+
+test('student choice responds before the draft request finishes without moving its label', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'EN', exact: true }).click()
+  await page.getByRole('button', { name: /Explore as student/ }).click()
+  const choice = page.locator('.evaluation-pair').first().locator('input[type=radio]').first()
+  await expect(choice).toBeVisible()
+  const label = choice.locator('..')
+  const before = await label.evaluate((element) => ({
+    width: element.getBoundingClientRect().width,
+    weight: getComputedStyle(element).fontWeight,
+  }))
+  let releaseRequest!: () => void
+  const pendingRequest = new Promise<void>((resolve) => { releaseRequest = resolve })
+  await page.route('**/evaluation/group/draft', async (route) => {
+    await pendingRequest
+    await route.continue()
+  })
+
+  try {
+    await choice.click()
+    expect(await choice.isChecked()).toBe(true)
+    const after = await label.evaluate((element) => ({
+      width: element.getBoundingClientRect().width,
+      weight: getComputedStyle(element).fontWeight,
+    }))
+    expect(after).toEqual(before)
+  } finally {
+    releaseRequest()
+  }
 })
