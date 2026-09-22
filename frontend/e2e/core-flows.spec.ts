@@ -48,6 +48,8 @@ test('student saves and submits a pairwise evaluation', async ({ page }) => {
   await page.getByRole('button', { name: /Explore as student/ }).click()
   await expect(page.getByText('student1@example.edu')).toBeVisible()
   await expect(page.getByText('Team project review')).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('Team project review')).toBeVisible()
 
   const groupEvaluation = page.getByRole('heading', { name: 'Group evaluation' }).locator('..')
   await groupEvaluation.locator('input[type=radio]:not(:checked)').first().click()
@@ -55,4 +57,7 @@ test('student saves and submits a pairwise evaluation', async ({ page }) => {
   await groupEvaluation.getByRole('button', { name: 'Submit saved answers' }).click()
   await groupEvaluation.getByRole('button', { name: 'Confirm submission' }).click()
   await expect(groupEvaluation.getByText(/Submitted 1 of \d+ pairs\./)).toBeVisible()
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.reload()
+  await expect(page.getByRole('button', { name: /Explore as student/ })).toBeVisible()
 })

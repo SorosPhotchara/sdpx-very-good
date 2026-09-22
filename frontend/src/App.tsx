@@ -7,10 +7,27 @@ import { AddStudent } from './AddStudent'
 import { useLanguage } from './i18n'
 
 const demo = import.meta.env.VITE_AUTH_MODE === 'mock'
+const sessionKey = 'paireval-credential'
+
+function tokenExpiry(token: string): number | null {
+  try {
+    const payload = JSON.parse(window.atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: unknown }
+    return typeof payload.exp === 'number' && Number.isFinite(payload.exp) ? payload.exp * 1000 : null
+  } catch { return null }
+}
+
+function savedCredential(): string | null {
+  const token = window.sessionStorage.getItem(sessionKey)
+  if (token && (demo ? token.startsWith('mock:') : (tokenExpiry(token) ?? 0) > Date.now() + 30_000)) return token
+  window.sessionStorage.removeItem(sessionKey)
+  return null
+}
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage()
   const sessionTimer = useRef<number | null>(null)
+  const restoreStarted = useRef(false)
+  const [restoring, setRestoring] = useState(true)
   const [health, setHealth] = useState('loading')
   const [classrooms, setClassrooms] = useState<Classroom[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -23,6 +40,12 @@ export default function App() {
 
   useEffect(() => {
     getHealth().then((data) => setHealth(data.status)).catch(() => setHealth('offline'))
+    if (!restoreStarted.current) {
+      restoreStarted.current = true
+      const token = savedCredential()
+      if (token) void handleSignIn(token).finally(() => setRestoring(false))
+      else setRestoring(false)
+    }
     return () => { if (sessionTimer.current != null) window.clearTimeout(sessionTimer.current) }
   }, [])
 
@@ -30,6 +53,7 @@ export default function App() {
     if (sessionTimer.current != null) window.clearTimeout(sessionTimer.current)
     sessionTimer.current = null
     setCredential('')
+    window.sessionStorage.removeItem(sessionKey)
     setCurrentUser(null)
     setClassrooms([])
     setSelectedId(null)
@@ -39,11 +63,7 @@ export default function App() {
   function scheduleSessionEnd(token: string) {
     if (sessionTimer.current != null) window.clearTimeout(sessionTimer.current)
     if (demo) return
-    let delay = 55 * 60 * 1000
-    try {
-      const payload = JSON.parse(window.atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: number }
-      if (typeof payload.exp === 'number') delay = Math.max(0, payload.exp * 1000 - Date.now() - 30_000)
-    } catch { /* Server validates the token. */ }
+    const delay = Math.max(0, (tokenExpiry(token) ?? Date.now() + 55 * 60 * 1000) - Date.now() - 30_000)
     sessionTimer.current = window.setTimeout(() => signOut(language === 'th' ? 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง' : 'Session expired. Sign in again.'), delay)
   }
 
@@ -55,6 +75,7 @@ export default function App() {
       setClassrooms(availableClassrooms)
       setSelectedId(availableClassrooms.find((item) => item.name === 'PairEval Demo')?.id ?? availableClassrooms[0]?.id ?? null)
       setError('')
+      if (demo || (tokenExpiry(token) ?? 0) > Date.now() + 30_000) window.sessionStorage.setItem(sessionKey, token)
       scheduleSessionEnd(token)
     } catch {
       signOut(language === 'th' ? 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง' : 'Sign-in could not be verified. Please try again.')
@@ -117,7 +138,7 @@ export default function App() {
 
       <main className="main-content">
         {error && <p role="status" className="notice error">{error}</p>}
-        {!currentUser ? <section className="welcome-layout">
+        {restoring ? <p role="status">{language === 'th' ? 'กำลังกู้คืนการเข้าสู่ระบบ...' : 'Restoring sign-in...'}</p> : !currentUser ? <section className="welcome-layout">
           <div className="welcome-copy"><span className="eyebrow">THE PAIRWISE REVIEW WORKSPACE</span><h1>{language === 'th' ? <>ประเมินอย่าง<br /><em>เป็นธรรม</em> ด้วย<br />มุมมองที่หลากหลาย</> : <>A fairer view<br />of every <em>contribution.</em></>}</h1><p>{language === 'th' ? 'เปรียบเทียบผลงานเป็นคู่ ติดตามความคืบหน้า และดูคะแนนในพื้นที่เดียว' : 'Compare work in pairs, track progress, and review scores in one place.'}</p></div>
           <div className="login-panel"><div className="panel-number">01 / ACCESS</div><h2>{language === 'th' ? 'เข้าสู่พื้นที่การเรียนรู้' : 'Enter your workspace'}</h2><p>{language === 'th' ? 'เลือกบทบาทเพื่อทดลองระบบด้วยข้อมูลตัวอย่าง' : 'Choose a role to explore the sample workspace.'}</p>
             {demo ? <div className="demo-options"><button type="button" className="demo-option" onClick={() => void handleSignIn('mock:teacher@example.edu')}><span className="role-icon">T</span><span><strong>{language === 'th' ? 'ทดลองเป็นอาจารย์' : 'Explore as instructor'}</strong><small>teacher@example.edu</small></span><span>↗</span></button><button type="button" className="demo-option" onClick={() => void handleSignIn('mock:student1@example.edu')}><span className="role-icon student">S</span><span><strong>{language === 'th' ? 'ทดลองเป็นนักศึกษา' : 'Explore as student'}</strong><small>student1@example.edu</small></span><span>↗</span></button></div> : <GoogleSignIn onSignIn={handleSignIn} />}
