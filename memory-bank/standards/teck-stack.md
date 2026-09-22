@@ -2,7 +2,7 @@
 
 ## Decision Summary
 ทีม: เก่งมากครับ
-Domain: [ชื่อ domain]**
+Domain: Pairwise Evaluation System (PairEval)
 Date: 21-7-2026
 
 ## Frontend
@@ -17,7 +17,7 @@ Date: 21-7-2026
 - Rationale: คุ้นเคยกับ python
 
 ## Database
-- SQLite
+- POSTGRESQL
 - Rationale: เก็บในไฟล์เดียว ไม่ต้องติดตั้ง แค่ Import
 
 ## Deployment

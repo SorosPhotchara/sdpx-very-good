@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: paireval
+      POSTGRES_USER: paireval
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - paireval_demo_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paireval -d paireval"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  e2e:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: frontend/e2e/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      E2E_DATABASE_URL: postgresql+psycopg://paireval@postgres:5432/paireval
+    ipc: host
+
+volumes:
+  paireval_demo_data:
+
+
+
+# services:
+#   app:
+#     build:
+#       context: .
+#       target: build          # dev ใช้ stage ที่มี devDependencies
+#     ports:
+#       - "3000:3000"
+#     environment:
+#       DATABASE_URL: ${DATABASE_URL:-postgres://user:pass@db:5432/appdb}
+#       NODE_ENV: development
+#     volumes:
+#       - .:/app               # hot reload สำหรับ dev
+#       - /app/node_modules    # ไม่ override node_modules ใน image
+#     command: npm run dev
+#     depends_on:
+#       db:
+#         condition: service_healthy
+
+#   db:
+#     image: postgres:17-alpine
+#     environment:
+#       POSTGRES_DB: appdb
+#       POSTGRES_USER: user
+#       POSTGRES_PASSWORD: pass
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U user -d appdb"]
+#       interval: 5s
+#       timeout: 5s
+#       retries: 5
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     ports:
+#       - "5432:5432"          # expose สำหรับ local database tools
+
+# volumes:
+#   postgres_data:

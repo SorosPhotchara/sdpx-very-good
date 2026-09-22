@@ -30,10 +30,21 @@ def get_students(db: Session, skip: int = 0, limit: int = 100):
 
 
 def create_student(db: Session, student: schemas.StudentCreate):
+    group_name = student.group_name.strip() if student.group_name else None
+    group = None
+    if group_name:
+        group = db.query(models.Group).filter_by(
+            classroom_id=student.classroom_id, name=group_name
+        ).first()
+        if group is None:
+            group = models.Group(name=group_name, classroom_id=student.classroom_id)
+            db.add(group)
+            db.flush()
     db_student = models.Student(
         email=student.email,
         display_name=student.display_name,
-        group_name=student.group_name,
+        group_name=group_name,
+        group_id=group.id if group else None,
         classroom_id=student.classroom_id,
     )
     db.add(db_student)
