@@ -14,7 +14,7 @@
 ### 1. Clone โปรเจกต์และสร้างไฟล์ environment
 
 ```powershell
-git clone <repository-url>
+git clone https://github.com/SorosPhotchara/sdpx-very-good
 cd sdpx-very-good
 
 Copy-Item backend\.env.example backend\.env
