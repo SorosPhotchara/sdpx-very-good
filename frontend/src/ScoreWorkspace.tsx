@@ -23,7 +23,7 @@ export function ScoreWorkspace({ assignmentId, isInstructor }: { assignmentId: n
     {resource.loading && <p role="status">{language === 'th' ? 'กำลังโหลดคะแนน...' : 'Loading scores...'}</p>}
     {resource.error && <p role="alert">{resource.error}</p>}
     {error && <p role="status">{error}</p>}
-    {(mine || report) && <div className="overflow-x-auto"><table className="w-full text-left">
+    {(mine || report) && <div className="score-table-scroll overflow-x-auto" role="region" aria-label={t('Scores and coverage')} tabIndex={0}><table className="w-full text-left">
       <thead><tr><th className="p-2">{t('Student')}</th><th className="p-2">{t('Group work')}</th><th className="p-2">{t('Individual work')}</th><th className="p-2">{t('Group participation')}</th><th className="p-2">{t('Individual participation')}</th></tr></thead>
       <tbody>{(report?.students ?? (mine ? [mine] : [])).map((row) => <tr key={row.student_id} className="border-t"><td className="p-2">{row.email}</td><ScoreCells row={row} /></tr>)}</tbody>
     </table></div>}
@@ -33,7 +33,7 @@ export function ScoreWorkspace({ assignmentId, isInstructor }: { assignmentId: n
     )}<button type="button" className="text-blue-700" onClick={() => void downloadReportXlsx(assignmentId).catch(() => setError(t('Export failed.')))}>{language === 'th' ? 'ส่งออก Excel' : 'Export Excel'}</button></div>}
     {report && <p className="mt-2">{t('Pairs missing target coverage')}: {report.coverage.filter((pair) => pair.missing_to_five > 0).length}/{report.coverage.length}</p>}
     {report && <details className="mt-2"><summary className="cursor-pointer">{t('Criterion details and effective votes')}</summary>
-      <div className="report-details-scroll max-h-72 overflow-auto"><table className="w-full text-left"><thead><tr><th>{t('Section')}</th><th>{t('Criterion')}</th><th>{t('Item ID')}</th><th>{t('Weighted score')}</th><th>{t('Effective votes')}</th></tr></thead>
+      <div className="report-details-scroll max-h-72 overflow-auto" role="region" aria-label={t('Criterion details and effective votes')} tabIndex={0}><table className="w-full text-left"><thead><tr><th>{t('Section')}</th><th>{t('Criterion')}</th><th>{t('Item ID')}</th><th>{t('Weighted score')}</th><th>{t('Effective votes')}</th></tr></thead>
         <tbody>{report.criterion_scores.map((item) => <tr key={item.criterion_id + '-' + item.item_id} className="border-t"><td>{t(item.section === 'group' ? 'Group' : 'Individual')}</td><td>{item.criterion}</td><td>{item.item_id}</td><td>{item.weighted_score == null ? t('No data') : item.weighted_score.toFixed(2)}</td><td>{item.effective_votes}</td></tr>)}</tbody></table></div>
     </details>}
   </details>

@@ -46,7 +46,7 @@ function SectionEditor({
     <label className="block text-sm">{t('Deadline')}
       <Input type="datetime-local" required={active} value={value.deadline} onChange={(event) => update({ deadline: event.target.value })} className="mt-1" />
     </label>
-    {value.criteria.map((criterion, index) => <div key={index} className="flex flex-wrap gap-2 items-end">
+    {value.criteria.map((criterion, index) => <div key={index} className="criterion-row flex flex-wrap gap-2 items-end">
       <label className="text-sm flex-1">{t('Criterion')}
         <Input value={criterion.name} onChange={(event) => updateCriterion(index, { name: event.target.value })} className="mt-1" />
       </label>

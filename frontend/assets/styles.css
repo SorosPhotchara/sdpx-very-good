@@ -192,3 +192,18 @@ details>summary:focus-visible{background:var(--ui-hover)}
   button,summary,.choice-option,.classroom-link .nav-arrow,.demo-option>span:last-child,details>summary::before{transition:none}
   .demo-option:hover,.workspace-main button.publish-action:hover,.classroom-link:hover .nav-arrow,.demo-option:hover>span:last-child{transform:none}
 }
+
+/* Keep classroom content readable without widening the viewport. */
+.page-heading h1,.workspace-main,.workspace-main legend{min-width:0;overflow-wrap:anywhere}
+.score-table-scroll,.report-details-scroll{max-width:100%;overscroll-behavior-inline:contain}
+.score-table-scroll table,.report-details-scroll table{min-width:600px}
+.criterion-row>label{min-width:0}
+@media(max-width:700px){
+  .main-content input,.main-content select,.create-classroom input{font-size:16px}
+}
+@media(max-width:600px){
+  .criterion-row{display:grid;grid-template-columns:minmax(0,1fr) auto}
+  .criterion-row>label:first-child{grid-column:1/-1}
+  .criterion-row>label:nth-child(2){width:100%}
+  .criterion-row>button{justify-self:end}
+}
