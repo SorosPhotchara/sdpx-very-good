@@ -167,7 +167,12 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
       setGroup(section('group'))
       setIndividual(section('individual'))
       setInstructorWeight(String(setup.instructor_weight))
-      if (editorRef.current) { editorRef.current.open = true; editorRef.current.querySelector('input')?.focus() }
+      if (editorRef.current) {
+        editorRef.current.open = true
+        const firstInput = editorRef.current.querySelector('input')
+        firstInput?.focus({ preventScroll: true })
+        firstInput?.scrollIntoView({ block: 'nearest' })
+      }
       setStatus(language === 'th' ? 'กำลังแก้ไข ' + setup.title + ' เปิดแบบฟอร์มด้านล่าง' : 'Editing ' + setup.title + '. Open the assignment form below.')
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Could not load assignment setup.')

@@ -1,6 +1,13 @@
 :root{font-family:"Noto Sans Thai Variable",sans-serif;color:#172629;background:#f5f4ef;font-synthesis:none;font-size:15px;line-height:1.55;--ui-accent:#1d615b;--ui-hover:#edf5f0;--ui-focus:#1d615b;--ui-border:#a6bdb2;--ui-danger:#963e35;--ui-duration:160ms}
 *{box-sizing:border-box}
 body{margin:0;min-width:320px}
+html{scroll-padding-block:24px;scrollbar-gutter:stable}
+.sidebar,.pair-plan-list,.report-details-scroll{scrollbar-gutter:stable;scroll-padding-block:12px}
+.pair-plan-list,.report-details-scroll{overscroll-behavior-block:contain}
+@media(min-width:701px){.sidebar{overscroll-behavior-block:contain}}
+@media(prefers-reduced-motion:no-preference){
+  html,.sidebar,.classroom-list,.pair-plan-list,.report-details-scroll{scroll-behavior:smooth}
+}
 button,input,select{font:inherit}
 button{cursor:pointer}
 button:disabled{cursor:not-allowed}
