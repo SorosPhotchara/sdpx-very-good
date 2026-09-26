@@ -7,7 +7,7 @@
 ## สิ่งที่ต้องติดตั้ง
 
 - Git
-- Python 3.12
+- Python 3.12 ขึ้นไป
 - Node.js และ npm
 - Docker Desktop
 
@@ -26,6 +26,8 @@ Copy-Item frontend\.env.example frontend\.env
 ไฟล์ `.env` จะไม่ถูก commit เข้า Git ให้แต่ละคนสร้างจาก `.env.example` บนเครื่องของตนเอง
 
 ### 2. เลือกวิธีเข้าสู่ระบบ
+
+`AUTH_MODE` ใน `backend/.env` กับ `VITE_AUTH_MODE` ใน `frontend/.env` ต้องตรงกันเสมอ ถ้าตั้งคนละโหมด Frontend จะส่ง token คนละชนิดกับที่ Backend ตรวจ และการเข้าสู่ระบบจะล้มเหลวด้วย 401
 
 #### โหมดทดลอง
 

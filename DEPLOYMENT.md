@@ -2,6 +2,8 @@
 
 Deploy from the repository root. `vercel.json` uses Vercel Services (currently beta) to host the Vite frontend and FastAPI API in one project. `/api/*` goes to FastAPI; the frontend uses this same-origin prefix in production.
 
+A service rewrite forwards the matched path unchanged, so FastAPI receives `/api/...` rather than `/...`. `API_ROOT_PATH` therefore mounts every router under that prefix; without it only `/api/health` resolves and every other endpoint returns 404. Leave `API_ROOT_PATH` unset locally, where the frontend calls the API on its own origin.
+
 ## Account and database
 
 1. Run `npx vercel login`, then `npx vercel link` from the repository root.
@@ -11,7 +13,7 @@ Deploy from the repository root. `vercel.json` uses Vercel Services (currently b
 | Variable | Value |
 | --- | --- |
 | `DATABASE_URL` | Neon connection URL, using `postgresql+psycopg://` and retaining `sslmode=require` |
-| `API_ROOT_PATH` | `/api` |
+| `API_ROOT_PATH` | `/api` (API service only; mounts the routers under the rewrite prefix) |
 | `APP_ENV` | `production` |
 | `AUTH_MODE` | `google` |
 | `GOOGLE_CLIENT_ID` | Client ID from the Google OAuth client named `pairwise` |
@@ -19,8 +21,9 @@ Deploy from the repository root. `vercel.json` uses Vercel Services (currently b
 | `FRONTEND_ORIGINS` | The HTTPS staging origin |
 | `INSTRUCTOR_EMAILS` | Comma-separated approved instructor emails |
 | `ADMIN_EMAILS` | Comma-separated approved administrator emails |
+| `VITE_AUTH_MODE` | Leave unset, or `google`. Never `mock` outside local development |
 
-Leave `VITE_API_BASE_URL` unset so the frontend uses `/api`. Environment files are excluded from CLI uploads. Never put a database password or Google client secret in `VITE_*` variables.
+Leave `VITE_API_BASE_URL` unset so the frontend uses `/api`. Vite inlines `VITE_*` values at build time, so `VITE_GOOGLE_CLIENT_ID` must be present for the frontend service in every environment you build, not only at runtime. Environment files are excluded from CLI uploads. Never put a database password or Google client secret in `VITE_*` variables.
 
 ## Migration and deployment
 
