@@ -194,4 +194,10 @@ npm.cmd --prefix frontend run test:e2e
 
 These container tests use a temporary PostgreSQL database and mock Google identities. They do not need Neon credentials or a Google OAuth client. The runner removes the test containers and temporary data afterward.
 
+### Frontend UI components
+
+The frontend uses shadcn/ui Button, Input, Label, Alert and Alert Dialog components in `frontend/src/components/ui/`. The teal theme is defined in `frontend/src/index.css` and connected through `frontend/tailwind.config.cjs`; `frontend/components.json` configures the CLI and `@/` imports. Group reassignment uses an accessible modal confirmation; submission keeps its confirmation beside the evaluation.
+
+This application uses React 18 and Tailwind CSS 3. Add compatible components from `frontend/` with `npx.cmd shadcn@2.3.0 add <component>`. Components are source files owned by this repository; adapt their styles to the existing theme rather than replacing global typography or layout.
+
 คำสั่ง E2E ใช้ `compose.test.yml` เพื่อ build และรัน Playwright, Chromium, Backend และ Frontend ภายใน service `e2e` พร้อมฐานข้อมูล `test-db` แบบชั่วคราว ข้อมูลทดสอบอยู่ใน schema `paireval_e2e` ซึ่งถูกสร้างใหม่ทุกครั้ง และ container ทดสอบจะถูกลบเมื่อจบ

@@ -3,6 +3,8 @@ import { getEvaluation, saveEvaluationDraft, submitEvaluation, type EvaluationPa
 import { useLanguage } from './i18n'
 import { useResource } from './useResource'
 import { useAsyncLock } from './useAsyncLock'
+import { Button } from './components/ui/button'
+import { Alert, AlertDescription } from './components/ui/alert'
 
 const choices = ['Strongly left', 'Slightly left', 'Equal', 'Slightly right', 'Strongly right']
 
@@ -84,10 +86,10 @@ export function EvaluationWorkspace({ assignmentId, section }: { assignmentId: n
       </div>
       {page.is_open && page.pairs.length > 0 && <button type="button" disabled={busy || !page.pairs.some((pair) => pair.draft_choice != null)}
         onClick={() => setConfirmSubmit(true)} className="mt-3 rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{t('Submit saved answers')}</button>}
-      {confirmSubmit && <div className="confirm-panel" role="group" aria-label={t('Submit saved answers')}>
-        <p>{t('Submit all currently saved answers for this section?')}</p>
-        <div><button type="button" disabled={busy} onClick={() => void submit()}>{language === 'th' ? 'ยืนยันการส่ง' : 'Confirm submission'}</button><button type="button" disabled={busy} onClick={() => setConfirmSubmit(false)}>{language === 'th' ? 'ยกเลิก' : 'Cancel'}</button></div>
-      </div>}
+      {confirmSubmit && <Alert className="mt-3" role="group" aria-label={t('Submit saved answers')}>
+        <AlertDescription>{t('Submit all currently saved answers for this section?')}</AlertDescription>
+        <div className="mt-4 flex flex-wrap gap-3"><Button type="button" disabled={busy} onClick={() => void submit()}>{language === 'th' ? 'ยืนยันการส่ง' : 'Confirm submission'}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setConfirmSubmit(false)}>{language === 'th' ? 'ยกเลิก' : 'Cancel'}</Button></div>
+      </Alert>}
     </>}
     {message && <p role="status" className="mt-2">{message}</p>}
     </div>

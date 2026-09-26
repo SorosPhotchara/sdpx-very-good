@@ -1,3 +1,6 @@
+import { Label } from './components/ui/label'
+import { Button } from './components/ui/button'
+import { Input } from './components/ui/input'
 import { useState, type FormEvent } from 'react'
 import { approveInstructor, getInstructorApprovals, revokeInstructor } from './api'
 import { useLanguage } from './i18n'
@@ -47,16 +50,16 @@ export function InstructorAdminWorkspace() {
       <p>{t('Approved instructors can be invited into classrooms by a classroom instructor.')}</p>
     </div>
     <form className="instructor-admin-form" onSubmit={(event) => void submit(event)}>
-      <label htmlFor="approved-instructor-email">{t('Instructor Google email')}</label>
-      <div><input id="approved-instructor-email" data-testid="approved-instructor-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.edu" />
-        <button type="submit" disabled={action.busy || resource.loading} aria-busy={action.busy}>{t(action.busy ? 'Working...' : 'Approve instructor')}</button></div>
+      <Label htmlFor="approved-instructor-email">{t('Instructor Google email')}</Label>
+      <div><Input id="approved-instructor-email" data-testid="approved-instructor-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.edu" />
+        <Button type="submit" disabled={action.busy || resource.loading} aria-busy={action.busy}>{t(action.busy ? 'Working...' : 'Approve instructor')}</Button></div>
     </form>
     {resource.loading && <p role="status">{t('Loading...')}</p>}
-    {resource.error && <div role="alert">{resource.error} <button type="button" onClick={() => void resource.refresh()}>{t('Retry')}</button></div>}
+    {resource.error && <div role="alert">{resource.error} <Button type="button" variant="outline" onClick={() => void resource.refresh()}>{t('Retry')}</Button></div>}
     <ul className="instructor-admin-list">
       {instructors.map((instructor) => <li key={instructor.email}>
         <div><strong>{instructor.email}</strong><small>{instructor.source === 'environment' ? t('Configured by administrator') : t('Approved by') + ` ${instructor.approved_by ?? ''}`}</small></div>
-        {instructor.source === 'database' && <button type="button" disabled={action.busy || resource.loading} aria-label={`${t('Revoke')} ${instructor.email}`} onClick={() => void revoke(instructor.email)}>{t('Revoke')}</button>}
+        {instructor.source === 'database' && <Button type="button" variant="outline" disabled={action.busy || resource.loading} aria-label={`${t('Revoke')} ${instructor.email}`} onClick={() => void revoke(instructor.email)}>{t('Revoke')}</Button>}
       </li>)}
     </ul>
     {message && <p role="status" className="instructor-admin-status">{message}</p>}

@@ -185,7 +185,7 @@ details>summary:focus-visible{background:var(--ui-hover)}
   .main-content{padding:28px 18px}.topbar{padding:0 16px;gap:12px;min-height:66px;height:auto}
   .topbar-actions{gap:4px}.signout{padding:8px;font-size:12px}.language-switch{padding:2px}
   .login-panel{padding:24px;box-shadow:5px 5px 0 #dce8df}.welcome-copy h1{font-size:clamp(32px,9vw,43px)}
-  .workspace-main .inline-flex{margin-left:0;margin-top:10px;display:flex}
+  .workspace-main span.inline-flex{margin-left:0;margin-top:10px;display:flex}
   .evaluation-section-summary span{margin-left:15px}.app-footer{padding:18px}
 }
 @media(prefers-reduced-motion:reduce){

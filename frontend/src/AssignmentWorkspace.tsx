@@ -1,3 +1,5 @@
+import { Button } from './components/ui/button'
+import { Input } from './components/ui/input'
 import { useRef, useState, type FormEvent } from 'react'
 import {
   createAssignment, getAssignments, getAssignmentSetup, previewAssignment, publishAssignment, updateAssignmentSetup,
@@ -36,27 +38,27 @@ function SectionEditor({
   return <fieldset className="rounded-xl border border-slate-200 p-4 space-y-3">
     <legend className="font-medium">{title}</legend>
     <label className="block text-sm">{t('Work score maximum')}
-      <input type="number" min="0" value={value.score} onChange={(event) => update({ score: event.target.value })} className="mt-1 block w-full border rounded p-2" />
+      <Input type="number" min="0" value={value.score} onChange={(event) => update({ score: event.target.value })} className="mt-1" />
     </label>
     <label className="block text-sm">{t('Participation maximum')}
-      <input type="number" min="0" value={value.participation} onChange={(event) => update({ participation: event.target.value })} className="mt-1 block w-full border rounded p-2" />
+      <Input type="number" min="0" value={value.participation} onChange={(event) => update({ participation: event.target.value })} className="mt-1" />
     </label>
     <label className="block text-sm">{t('Deadline')}
-      <input type="datetime-local" required={active} value={value.deadline} onChange={(event) => update({ deadline: event.target.value })} className="mt-1 block w-full border rounded p-2" />
+      <Input type="datetime-local" required={active} value={value.deadline} onChange={(event) => update({ deadline: event.target.value })} className="mt-1" />
     </label>
     {value.criteria.map((criterion, index) => <div key={index} className="flex flex-wrap gap-2 items-end">
       <label className="text-sm flex-1">{t('Criterion')}
-        <input value={criterion.name} onChange={(event) => updateCriterion(index, { name: event.target.value })} className="mt-1 block w-full border rounded p-2" />
+        <Input value={criterion.name} onChange={(event) => updateCriterion(index, { name: event.target.value })} className="mt-1" />
       </label>
       <label className="text-sm w-24">{t('Weight %')}
-        <input type="number" min="1" max="100" value={criterion.weight} onChange={(event) => updateCriterion(index, { weight: event.target.value })} className="mt-1 block w-full border rounded p-2" />
+        <Input type="number" min="1" max="100" value={criterion.weight} onChange={(event) => updateCriterion(index, { weight: event.target.value })} className="mt-1" />
       </label>
-      <button type="button" onClick={() => update({ criteria: value.criteria.filter((_, current) => current !== index) })} className="text-red-700 text-sm p-2">{t('Remove')}</button>
+      <Button type="button" onClick={() => update({ criteria: value.criteria.filter((_, current) => current !== index) })} variant="ghost" className="text-destructive">{t('Remove')}</Button>
     </div>)}
     {active && <p role="status" className={Math.abs(totalWeight - 100) < 0.001 ? 'text-sm text-green-700' : 'text-sm text-red-700'}>
       {language === 'th' ? `น้ำหนักเกณฑ์รวม ${totalWeight}% / 100%` : `Criterion weights: ${totalWeight}% / 100%`}
     </p>}
-    <button type="button" onClick={() => update({ criteria: [...value.criteria, { name: '', weight: '' }] })} className="text-blue-700 text-sm">{t('Add criterion')}</button>
+    <Button type="button" onClick={() => update({ criteria: [...value.criteria, { name: '', weight: '' }] })} variant="outline" size="sm">{t('Add criterion')}</Button>
   </fieldset>
 }
 
@@ -212,7 +214,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
 
   return <div className="mt-4 space-y-3">
     {resource.loading && <p role="status">{language === 'th' ? 'กำลังโหลดงานประเมิน...' : 'Loading assignments...'}</p>}
-    {resource.error && <div role="alert">{resource.error} <button type="button" onClick={() => void resource.refresh()}>{t('Retry')}</button></div>}
+    {resource.error && <div role="alert">{resource.error} <Button type="button" variant="outline" onClick={() => void resource.refresh()}>{t('Retry')}</Button></div>}
     {!resource.loading && !resource.error && assignments.length === 0 && <div className="assignment-empty">
       <strong>{t('No assignments yet.')}</strong>
       <p>{isInstructor
@@ -223,9 +225,9 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
       <span>{assignment.title}</span>
       {isInstructor && <span className="ml-3 inline-flex gap-2">
         {!assignment.published_at && <>
-          <button type="button" disabled={busy || resource.loading} aria-expanded={Boolean(pairPreviews[assignment.id])} aria-controls={`pair-preview-${assignment.id}`} aria-busy={pairAction?.id === assignment.id && !pairAction.publish} className="text-blue-700" onClick={() => void handlePairs(assignment.id, false)}>{pairAction?.id === assignment.id && !pairAction.publish ? (language === 'th' ? 'กำลังสร้างตัวอย่าง...' : 'Preparing preview...') : t(pairPreviews[assignment.id] ? 'Hide preview' : 'Preview pairs')}</button>
-          <button type="button" disabled={busy || resource.loading} className="text-blue-700" onClick={() => void beginEdit(assignment.id)}>{t('Edit')}</button>
-          <button type="button" disabled={busy || resource.loading} aria-busy={pairAction?.id === assignment.id && pairAction.publish} className="publish-action" onClick={() => void handlePairs(assignment.id, true)}>{pairAction?.id === assignment.id && pairAction.publish ? (language === 'th' ? 'กำลังเผยแพร่...' : 'Publishing...') : t('Publish')}</button>
+          <Button type="button" disabled={busy || resource.loading} aria-expanded={Boolean(pairPreviews[assignment.id])} aria-controls={`pair-preview-${assignment.id}`} aria-busy={pairAction?.id === assignment.id && !pairAction.publish} variant="outline" onClick={() => void handlePairs(assignment.id, false)}>{pairAction?.id === assignment.id && !pairAction.publish ? (language === 'th' ? 'กำลังสร้างตัวอย่าง...' : 'Preparing preview...') : t(pairPreviews[assignment.id] ? 'Hide preview' : 'Preview pairs')}</Button>
+          <Button type="button" disabled={busy || resource.loading} variant="outline" onClick={() => void beginEdit(assignment.id)}>{t('Edit')}</Button>
+          <Button type="button" disabled={busy || resource.loading} aria-busy={pairAction?.id === assignment.id && pairAction.publish} className="publish-action" onClick={() => void handlePairs(assignment.id, true)}>{pairAction?.id === assignment.id && pairAction.publish ? (language === 'th' ? 'กำลังเผยแพร่...' : 'Publishing...') : t('Publish')}</Button>
         </>}
         {assignment.published_at && <span className="text-green-700">{t('Published')}</span>}
       </span>}
@@ -242,15 +244,15 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
       <form onSubmit={(event) => void handleCreate(event)} className="mt-4 space-y-4">
         <fieldset disabled={busy} className="space-y-4">
         <label className="block text-sm">{t('Title')}
-          <input required value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1 block w-full border rounded p-2" />
+          <Input required value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1" />
         </label>
         <SectionEditor title={t('Group evaluation')} value={group} onChange={setGroup} />
         <SectionEditor title={t('Individual evaluation')} value={individual} onChange={setIndividual} />
         <label className="block text-sm">{t('Instructor vote weight')}
-          <input type="number" min="0.1" step="0.1" value={instructorWeight} onChange={(event) => setInstructorWeight(event.target.value)} className="mt-1 block w-full border rounded p-2" />
+          <Input type="number" min="0.1" step="0.1" value={instructorWeight} onChange={(event) => setInstructorWeight(event.target.value)} className="mt-1" />
         </label>
-        <button disabled={busy} aria-busy={busy} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{t(busy ? 'Working...' : editId == null ? 'Create assignment' : 'Save assignment')}</button>
-        {editId != null && <button type="button" className="ml-3 text-slate-600" onClick={() => setEditId(null)}>{t('Cancel edit')}</button>}
+        <Button disabled={busy} aria-busy={busy} type="submit">{t(busy ? 'Working...' : editId == null ? 'Create assignment' : 'Save assignment')}</Button>
+        {editId != null && <Button type="button" variant="ghost" className="ml-3" onClick={() => setEditId(null)}>{t('Cancel edit')}</Button>}
         </fieldset>
       </form>
     </details>}
