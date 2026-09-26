@@ -3,9 +3,9 @@ import { useLanguage } from './i18n'
 import { InstructorAdminWorkspace } from './InstructorAdminWorkspace'
 import { useResource } from './useResource'
 
-export function AdminDashboard({ health }: { health: string }) {
+export function AdminDashboard({ health, classroomRevision = '' }: { health: string; classroomRevision?: string }) {
   const { language, t } = useLanguage()
-  const resource = useResource('admin-overview', getAdminOverview)
+  const resource = useResource(`admin-overview:${classroomRevision}`, getAdminOverview)
   const overview = resource.data
   const error = resource.error
 

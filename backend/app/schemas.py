@@ -5,9 +5,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from .timezone import as_utc
 
-class ClassroomBase(BaseModel):
+class ClassroomName(BaseModel):
     name: str
-    instructor_emails: Optional[str] = ""
 
     @field_validator("name")
     @classmethod
@@ -16,6 +15,12 @@ class ClassroomBase(BaseModel):
         if not name:
             raise ValueError("Classroom name is required")
         return name
+
+class ClassroomBase(ClassroomName):
+    instructor_emails: Optional[str] = ""
+
+class ClassroomRename(ClassroomName):
+    pass
 
 class ClassroomCreate(ClassroomBase):
     pass

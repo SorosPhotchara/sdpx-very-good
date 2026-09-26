@@ -66,6 +66,11 @@ body{min-width:280px}
 .side-tools .tools-toggle{padding:14px 18px;border:0;min-height:52px;white-space:normal;background:#dcebe3;color:#174d43}
 .tools-content{padding:18px;gap:18px}
 .tools-content input[type=file]{font-size:13px;padding:8px}
+.classroom-settings{display:grid;gap:12px;padding-bottom:18px;border-bottom:1px solid var(--surface-border)}
+.workspace-side .tools-content .classroom-settings form{grid-template-columns:minmax(0,1fr);gap:8px}
+.workspace-side .classroom-settings form button{background:#fff;color:#1d615b;border:1px solid var(--control-border);padding:8px 12px}
+.classroom-settings>button{justify-self:start}
+.classroom-settings p{margin:0}
 .side-quote{display:none}
 .evaluation-section-content{padding:0 12px 16px}
 .evaluation-section .evaluation-pair{border-radius:10px;background:#f0f5f2;border-color:var(--surface-border);padding:12px}

@@ -10,6 +10,8 @@ All routes except `GET /health` require `Authorization: Bearer <Google ID token>
 | `GET /me` | verified user | Email, instructor flag, classroom membership IDs; activates matching pending Student memberships. |
 | `GET /classrooms/?skip=0&limit=100` | member or assigned instructor | Visible Classrooms only. `skip >= 0`, `1 <= limit <= 100`. |
 | `POST /classrooms/` | approved instructor | `{name}`; returns Classroom, with caller as first instructor. |
+| `PATCH /classrooms/{id}` | assigned instructor | `{name}`; trims and rejects blank names; returns updated Classroom. Membership and evaluations are preserved. |
+| `DELETE /classrooms/{id}` | assigned instructor | JSON `{name}` must match the current classroom name (409 otherwise). Returns 204; permanently removes only this classroom and its roster, groups, assignments, evaluations, notifications and reassignment history in one transaction. |
 | `POST /classrooms/{id}/instructors` | assigned instructor | `{email}`; email must be in the environment allowlist. |
 | `DELETE /classrooms/{id}/instructors/{email}` | assigned instructor | Removes an instructor unless they are the last one. |
 | `POST /classrooms/{id}/roster/import` | assigned instructor | `{csv_text}` with header `email,groupname`; returns imported count and row errors. Import is atomic and accepted once per empty roster. |

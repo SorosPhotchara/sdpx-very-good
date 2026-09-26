@@ -22,10 +22,20 @@ PairEval เป็นระบบประเมินผลงานแบบ�
 
 ### 2.1 สร้างห้องเรียน
 
-1. ไปที่ **เพิ่มห้องเรียน** ในแถบด้านซ้าย
+1. ไปที่ **เพิ่มห้องเรียน** ในแถบด้านซ้าย บนมือถือให้กด **+ สร้างห้อง** เพื่อเปิดฟอร์ม
 2. กรอกชื่อห้องเรียน
-3. กดปุ่ม **＋**
+3. กดปุ่ม **สร้างห้อง**
 4. เลือกห้องที่สร้างเพื่อเริ่มจัดการ
+
+#### เปลี่ยนชื่อห้องเรียน
+
+อาจารย์ประจำห้องเปิด **จัดการห้องเรียน** แก้ช่อง **ชื่อห้องเรียน** แล้วกด **บันทึกชื่อห้อง** รายชื่อนักศึกษาและงานประเมินเดิมยังคงอยู่
+
+#### ลบห้องเรียน
+
+เปิด **จัดการห้องเรียน** กด **ลบห้องเรียน** แล้วพิมพ์ชื่อห้องตามที่แสดงเพื่อเปิดปุ่ม **ลบห้องถาวร** กด **ยกเลิก** ได้ก่อนยืนยัน การลบจะลบรายชื่อ กลุ่ม งานประเมิน คำตอบ คะแนน และประวัติของห้องนี้ถาวร กู้คืนไม่ได้ ห้องอื่นไม่ได้รับผลกระทบ
+
+Instructors assigned to a classroom can open **Manage classroom**, edit **Classroom name**, and select **Save classroom name**. To delete it, select **Delete classroom**, type its current name, then select **Permanently delete classroom**. This permanently removes the room and its roster, groups, assignments, evaluations and history; other rooms are unaffected. Cancel before confirmation to keep the room.
 
 ### 2.2 เพิ่มนักศึกษา
 

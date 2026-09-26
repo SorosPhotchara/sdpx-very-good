@@ -122,6 +122,22 @@ export async function createClassroom(name: string): Promise<Classroom> {
   return readJson<Classroom>(response)
 }
 
+export async function renameClassroom(classroomId: number, name: string): Promise<Classroom> {
+  const response = await fetch(`${API_BASE}/classrooms/${classroomId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ name }),
+  })
+  return readJson<Classroom>(response)
+}
+
+export async function deleteClassroom(classroomId: number, name: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/classrooms/${classroomId}`, {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ name }),
+  })
+  if (!response.ok) await readJson(response)
+}
+
 export async function inviteInstructor(classroomId: number, email: string): Promise<Classroom> {
   const response = await fetch(`${API_BASE}/classrooms/${classroomId}/instructors`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
