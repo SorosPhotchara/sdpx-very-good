@@ -122,7 +122,8 @@ button:enabled:active{filter:brightness(.94)}
 .classroom-link.active{box-shadow:inset 3px 0 0 #1d615b;font-weight:700}
 .classroom-link .nav-arrow{transition:transform var(--ui-duration) ease}
 .classroom-link:focus-visible:not(.active){background:#29494f;color:#fff}
-.create-classroom button{flex:none;padding:0 12px;font-size:13px;font-weight:700}
+.create-classroom button{flex:none;padding:0 12px;background:#d8ebe3;color:#16323a;font-size:13px;font-weight:700}
+.create-classroom button:disabled{background:#344e55;color:#a7bab9;opacity:1}
 .create-classroom>div:focus-within{border-color:#f0a44c;box-shadow:0 0 0 2px #f0a44c}
 .topbar-crumb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .topbar-actions{flex:none;gap:12px}
@@ -166,7 +167,7 @@ details>summary:focus-visible{background:var(--ui-hover)}
   .classroom-link:hover .nav-arrow,.demo-option:hover>span:last-child{transform:translateX(3px)}
   .demo-option:hover{transform:none;border-color:var(--ui-accent);background:var(--ui-hover);box-shadow:0 3px 12px #16323a12}
   .language-switch button:hover:not(.selected),.signout:hover,.tools-toggle:hover,details>summary:hover{background:var(--ui-hover);color:var(--ui-accent)}
-  .create-classroom button:enabled:hover{background:#f3b87d}
+  .create-classroom button:enabled:hover{background:#bfe0d0;color:#16323a}
   .workspace-main button.text-blue-700:hover,.workspace-side button.text-blue-700:hover{background:#e3efe7;border-color:var(--ui-border)}
   .workspace-main button.bg-blue-600:enabled:hover,.workspace-side button.bg-blue-600:enabled:hover,.tools-content form button:enabled:hover,.instructor-admin-form button:enabled:hover,.confirm-panel button:first-child:enabled:hover{background:#174d48}
   .workspace-main button.publish-action:enabled:hover{transform:none;background:#174d48;box-shadow:0 2px 0 #164a46}
