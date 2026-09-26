@@ -35,7 +35,7 @@ function SectionEditor({
   const active = Number(value.score) > 0 || Number(value.participation) > 0
   const totalWeight = value.criteria.reduce((total, item) => total + Number(item.weight || 0), 0)
 
-  return <fieldset className="rounded-xl border border-slate-200 p-4 space-y-3">
+  return <fieldset className="assignment-section rounded-xl border border-slate-200 p-4">
     <legend className="font-medium">{title}</legend>
     <label className="block text-sm">{t('Work score maximum')}
       <Input type="number" min="0" value={value.score} onChange={(event) => update({ score: event.target.value })} className="mt-1" />
@@ -221,7 +221,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
         ? language === 'th' ? 'เปิด “สร้างงาน” ด้านล่างเพื่อกำหนดเกณฑ์และวันครบกำหนด จากนั้นดูตัวอย่างคู่ก่อนเผยแพร่ให้นักศึกษา' : 'Open “Create assignment” below to set criteria and deadlines, then preview the pairs before publishing to students.'
         : language === 'th' ? 'งานประเมินจะแสดงที่นี่เมื่ออาจารย์เพิ่มงาน หากยังไม่พบงาน ให้สอบถามอาจารย์ประจำห้องเรียน' : 'Evaluations will appear here when your instructor adds an assignment. If you are expecting one, ask your classroom instructor.'}</p>
     </div>}
-    {assignments.map((assignment) => <div key={assignment.id} className="border rounded-xl p-3 text-sm">
+    {assignments.map((assignment) => <div key={assignment.id} className="assignment-card border rounded-xl p-3 text-sm">
       <span>{assignment.title}</span>
       {isInstructor && <span className="ml-3 inline-flex gap-2">
         {!assignment.published_at && <>
@@ -239,10 +239,10 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
       <ScoreWorkspace assignmentId={assignment.id} isInstructor={isInstructor} />
       {isInstructor && assignment.published_at && <InstructorEvaluation assignmentId={assignment.id} classroomId={classroomId} email={email} />}
     </div>)}
-    {isInstructor && <details ref={editorRef} className="border rounded-xl p-3">
+    {isInstructor && <details ref={editorRef} className="assignment-editor border rounded-xl p-3">
       <summary className="cursor-pointer font-medium">{editId == null ? t('Create assignment') : t('Edit') + ' #' + editId}</summary>
-      <form onSubmit={(event) => void handleCreate(event)} className="mt-4 space-y-4">
-        <fieldset disabled={busy} className="space-y-4">
+      <form onSubmit={(event) => void handleCreate(event)} className="mt-4">
+        <fieldset disabled={busy}>
         <label className="block text-sm">{t('Title')}
           <Input required value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1" />
         </label>

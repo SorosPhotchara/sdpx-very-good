@@ -60,6 +60,7 @@ export default function App() {
   const [rosterStatus, setRosterStatus] = useState<Record<number, string>>({})
   const [instructorInput, setInstructorInput] = useState('')
   const [showSettings, setShowSettings] = useState(false)
+  const [showClassroomForm, setShowClassroomForm] = useState(false)
 
   useEffect(() => {
     if (!restoreStarted.current) {
@@ -130,6 +131,7 @@ export default function App() {
       setClassrooms((items) => [...items, classroom])
       setSelectedId(classroom.id)
       setNewClassroom('')
+      setShowClassroomForm(false)
       setError('')
     } catch { if (version === sessionVersion.current) setError(language === 'th' ? 'สร้างห้องเรียนไม่สำเร็จ' : 'Could not create the classroom.') }
     finally { classroomAction.finish() }
@@ -173,7 +175,8 @@ export default function App() {
         {!currentUser && <p className="sidebar-hint">{language === 'th' ? 'เข้าสู่ระบบเพื่อดูห้องเรียน' : 'Sign in to view classrooms'}</p>}
         {currentUser && classrooms.length === 0 && <p className="sidebar-hint">{language === 'th' ? 'ยังไม่มีห้องเรียน' : 'No classrooms yet'}</p>}
       </nav>
-      {currentUser?.is_instructor && <form className="create-classroom" onSubmit={(event) => { event.preventDefault(); void handleCreateClassroom() }}>
+      {currentUser?.is_instructor && <Button type="button" className="classroom-create-toggle" aria-expanded={showClassroomForm} aria-controls="create-classroom-form" onClick={() => setShowClassroomForm(value => !value)}>{showClassroomForm ? (language === 'th' ? 'ปิด' : 'Close') : (language === 'th' ? '+ สร้างห้อง' : '+ New room')}</Button>}
+      {currentUser?.is_instructor && <form id="create-classroom-form" className={'create-classroom' + (showClassroomForm ? ' is-open' : '')} onSubmit={(event) => { event.preventDefault(); void handleCreateClassroom() }}>
         <label htmlFor="new-classroom">{language === 'th' ? 'เพิ่มห้องเรียน' : 'Add classroom'}</label>
         <div><Input id="new-classroom" value={newClassroom} onChange={(event) => setNewClassroom(event.target.value)} required placeholder={language === 'th' ? 'ชื่อห้องเรียน' : 'Classroom name'} /><Button type="submit" aria-label={language === 'th' ? 'สร้างห้องเรียน' : 'Create classroom'} disabled={classroomAction.busy || !newClassroom.trim()} aria-busy={classroomAction.busy}>{language === 'th' ? 'สร้างห้อง' : 'Create'}</Button></div>
       </form>}
@@ -194,7 +197,7 @@ export default function App() {
         {signInAction.busy && <p role="status">{t('Signing in...')}</p>}
         {error && <p role="status" className="notice error">{error}</p>}
         {restoring ? <p role="status">{language === 'th' ? 'กำลังกู้คืนการเข้าสู่ระบบ...' : 'Restoring sign-in...'}</p> : !currentUser ? <section className="welcome-layout">
-          <div className="welcome-copy"><span className="eyebrow">THE PAIRWISE REVIEW WORKSPACE</span><h1>{language === 'th' ? <>ประเมินอย่าง<br /><em>เป็นธรรม</em> ด้วย<br />มุมมองที่หลากหลาย</> : <>A fairer view<br />of every <em>contribution.</em></>}</h1><p>{language === 'th' ? 'เปรียบเทียบผลงานเป็นคู่ ติดตามความคืบหน้า และดูคะแนนในพื้นที่เดียว' : 'Compare work in pairs, track progress, and review scores in one place.'}</p></div>
+          <div className="welcome-copy"><span className="eyebrow">{language === 'th' ? 'พื้นที่ประเมินแบบเปรียบเทียบคู่' : 'Pairwise evaluation workspace'}</span><h1>{language === 'th' ? <>มองทุกผลงาน<br /><em>อย่างเป็นธรรม</em></> : <>A fairer view<br />of every <em>contribution.</em></>}</h1><p>{language === 'th' ? 'เปรียบเทียบผลงานเป็นคู่ ติดตามความคืบหน้า และดูคะแนนในพื้นที่เดียว' : 'Compare work in pairs, track progress, and review scores in one place.'}</p></div>
           <div className="login-panel"><div className="panel-number">01 / ACCESS</div><h2>{language === 'th' ? 'เข้าสู่พื้นที่การเรียนรู้' : 'Enter your workspace'}</h2><p>{language === 'th' ? 'เลือกบทบาทเพื่อทดลองระบบด้วยข้อมูลตัวอย่าง' : 'Choose a role to explore the sample workspace.'}</p>
             {demo ? <div className="demo-options"><button type="button" disabled={signInAction.busy} className="demo-option" onClick={() => void handleSignIn('mock:' + demoInstructor)}><span className="role-icon">T</span><span><strong>{language === 'th' ? 'ทดลองเป็นอาจารย์' : 'Explore as instructor'}</strong><small>{demoInstructor}</small></span><span>↗</span></button><button type="button" disabled={signInAction.busy} className="demo-option" onClick={() => void handleSignIn('mock:' + demoStudent)}><span className="role-icon student">S</span><span><strong>{language === 'th' ? 'ทดลองเป็นนักศึกษา' : 'Explore as student'}</strong><small>{demoStudent}</small></span><span>↗</span></button><button type="button" disabled={signInAction.busy} className="demo-option" onClick={() => void handleSignIn('mock:67015114@kmitl.ac.th')}><span className="role-icon">A</span><span><strong>{language === 'th' ? 'ทดลองเป็นผู้ดูแลระบบ' : 'Explore as administrator'}</strong><small>67015114@kmitl.ac.th</small></span><span>→</span></button></div> : <GoogleSignIn onSignIn={handleSignIn} />}
             {demo && <p className="demo-note">{language === 'th' ? 'โหมดสาธิต · เลือกบทบาทด้านบนเพื่อเริ่มใช้งาน' : 'Demo mode · Choose a role above to get started'}</p>}
