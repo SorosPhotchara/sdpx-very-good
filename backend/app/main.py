@@ -9,7 +9,18 @@ from sqlalchemy.orm import Session
 from .dependencies import get_db
 from .routes import admin, assignments, classrooms, evaluations, reports
 
-app = FastAPI(title="PairEval Backend", version="0.1.0", root_path=os.environ.get("API_ROOT_PATH", ""))
+# Behind a platform rewrite such as Vercel's `/api/(.*)`, the upstream path still
+# carries the prefix, so the routes must be mounted under it rather than only
+# advertised through `root_path`.
+API_PREFIX = os.environ.get("API_ROOT_PATH", "").rstrip("/")
+
+app = FastAPI(
+    title="PairEval Backend",
+    version="0.1.0",
+    docs_url=f"{API_PREFIX}/docs",
+    redoc_url=f"{API_PREFIX}/redoc",
+    openapi_url=f"{API_PREFIX}/openapi.json",
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.environ.get("FRONTEND_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if origin.strip()],
@@ -29,4 +40,4 @@ def health_check(db: Session = Depends(get_db)) -> dict[str, str]:
 
 
 for route_group in (admin, classrooms, assignments, evaluations, reports):
-    app.include_router(route_group.router)
+    app.include_router(route_group.router, prefix=API_PREFIX)
