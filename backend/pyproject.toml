@@ -2,7 +2,7 @@
 name = "pairwise-evaluation-backend"
 version = "0.1.0"
 description = "PairEval classroom pairwise evaluation API"
-authors = ["PairEval Team <team@example.com>"]
+authors = [{name = "PairEval Team", email = "team@example.com"}]
 dependencies = [
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.23.0",

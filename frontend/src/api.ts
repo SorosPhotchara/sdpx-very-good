@@ -1,7 +1,12 @@
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "")
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? "/api" : "http://localhost:8000")).replace(/\/$/, "")
 
 export type Classroom = { id: number; name: string; instructor_emails: string }
-export type CurrentUser = { email: string; is_instructor: boolean; classroom_ids: number[] }
+export type CurrentUser = { email: string; is_instructor: boolean; is_admin: boolean; picture_url: string | null; classroom_ids: number[] }
+export type InstructorApproval = { email: string; source: 'database' | 'environment'; approved_by?: string | null; approved_at?: string | null }
+export type AdminOverview = {
+  classroom_count: number; student_count: number; instructor_count: number
+  classrooms: { id: number; name: string; instructors: string[]; student_count: number; assignment_count: number }[]
+}
 export type RosterImportResult = { imported: number; errors: string[] }
 export type CriterionInput = { name: string; weight: number }
 export type AssignmentSetup = {
@@ -17,6 +22,8 @@ export type AssignmentSetup = {
   individual_criteria: CriterionInput[]
 }
 export type Assignment = { id: number; title: string; published_at: string | null }
+export type PairPreviewItem = { section: 'group' | 'individual'; criterion: string; left: string; right: string; evaluator: string }
+export type PairPreview = { pair_assignments: number; pairs: PairPreviewItem[] }
 export type Criterion = { id: number; assignment_id: number; name: string; weight: number; is_group: boolean }
 export type Group = { id: number; name: string; classroom_id: number }
 export type Student = { id: number; email: string; group_name: string | null; group_id: number | null; classroom_id: number }
@@ -26,7 +33,7 @@ export type EvaluationPair = {
   draft_choice: number | null; submitted_choice: number | null
 }
 export type EvaluationPage = {
-  assignment_id: number; section: string; deadline: string | null
+  assignment_id: number; section: string; group_name: string | null; deadline: string | null
   is_open: boolean; submitted_at: string | null; pairs: EvaluationPair[]
 }
 export type StudentScore = {
@@ -76,6 +83,31 @@ export async function getClassrooms(): Promise<Classroom[]> {
 export async function getMe(): Promise<CurrentUser> {
   const response = await fetch(`${API_BASE}/me`, { headers: authHeaders() })
   return readJson<CurrentUser>(response)
+}
+
+export async function getInstructorApprovals(): Promise<InstructorApproval[]> {
+  const response = await fetch(`${API_BASE}/admin/instructors`, { headers: authHeaders() })
+  return readJson<InstructorApproval[]>(response)
+}
+
+export async function getAdminOverview(): Promise<AdminOverview> {
+  const response = await fetch(`${API_BASE}/admin/overview`, { headers: authHeaders() })
+  return readJson<AdminOverview>(response)
+}
+
+export async function approveInstructor(email: string): Promise<InstructorApproval> {
+  const response = await fetch(`${API_BASE}/admin/instructors`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ email }),
+  })
+  return readJson<InstructorApproval>(response)
+}
+
+export async function revokeInstructor(email: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/admin/instructors/${encodeURIComponent(email)}`, {
+    method: 'DELETE', headers: authHeaders(),
+  })
+  if (!response.ok) await readJson(response)
 }
 
 export async function createClassroom(name: string): Promise<Classroom> {
@@ -201,9 +233,9 @@ export async function updateAssignmentSetup(assignmentId: number, setup: Assignm
   return readJson<Assignment>(response)
 }
 
-export async function previewAssignment(assignmentId: number): Promise<{ pair_assignments: number }> {
+export async function previewAssignment(assignmentId: number): Promise<PairPreview> {
   const response = await fetch(`${API_BASE}/assignments/${assignmentId}/preview`, { headers: authHeaders() })
-  return readJson<{ pair_assignments: number }>(response)
+  return readJson<PairPreview>(response)
 }
 
 export async function publishAssignment(assignmentId: number): Promise<{ pair_assignments: number }> {

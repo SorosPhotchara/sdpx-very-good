@@ -24,7 +24,8 @@ def read_me(identity: Identity = Depends(current_identity), db: Session = Depend
         for member in activated:
             member.activated_at = now
         db.commit()
-    return {"email": identity.email, "is_instructor": identity.is_instructor,
+    return {"email": identity.email, "is_instructor": identity.is_instructor, "is_admin": identity.is_admin,
+            "picture_url": identity.picture_url,
             "classroom_ids": [member.classroom_id for member in memberships]}
 
 
@@ -62,8 +63,8 @@ def invite_instructor(
 ) -> models.Classroom:
     classroom = require_owner(classroom_id, identity, db)
     email = str(payload.email).strip().lower()
-    if email not in approved_instructors():
-        raise HTTPException(422, "Instructor email is not approved")
+    if email not in approved_instructors(db):
+        raise HTTPException(422, "Ask an administrator to approve this instructor first")
     emails = instructor_emails(classroom)
     emails.add(email)
     classroom.instructor_emails = ",".join(sorted(emails))

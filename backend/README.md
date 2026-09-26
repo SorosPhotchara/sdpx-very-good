@@ -18,7 +18,7 @@ Backend โหลด `backend/.env` ผ่าน `python-dotenv` อัตโน
 
 ## Authentication
 
-โหมดปกติใช้ Google Sign-In: frontend ส่ง Google ID token ให้ API และ backend ตรวจ audience ด้วย `GOOGLE_CLIENT_ID` รวมทั้งตรวจว่าอีเมลได้รับการยืนยันจาก Google อาจารย์ต้องมีอีเมลอยู่ใน `INSTRUCTOR_EMAILS`; นักศึกษาต้องมีอีเมลตรงกับ roster CSV ของห้องนั้น ไม่มี endpoint สมัครบัญชีด้วยรหัสผ่าน
+โหมดปกติใช้ Google Sign-In: frontend ส่ง Google ID token ให้ API และ backend ตรวจ audience ด้วย `GOOGLE_CLIENT_ID` รวมทั้งตรวจว่าอีเมลได้รับการยืนยันจาก Google ผู้ดูแลระบบเริ่มต้นกำหนดผ่าน `ADMIN_EMAILS`; อาจารย์เริ่มต้นกำหนดได้ใน `INSTRUCTOR_EMAILS` หรือเพิ่มจากหน้า Admin ซึ่งบันทึกใน PostgreSQL อาจารย์ที่ได้รับอนุมัติแล้วจึงเชิญเข้าห้องเรียนได้ นักศึกษาต้องมีอีเมลตรงกับ roster CSV ของห้องนั้น ไม่มี endpoint สมัครบัญชีด้วยรหัสผ่าน
 
 `AUTH_MODE=mock` ใช้ได้เฉพาะเมื่อ `APP_ENV=development` สำหรับเดโมในเครื่อง โหมดนี้ไม่มีการยืนยันตัวตนจริง อย่าเปิดในการ deploy
 

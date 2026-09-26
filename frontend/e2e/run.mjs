@@ -37,7 +37,7 @@ try {
   const api = start(python, ['run_e2e.py'], backend)
   const vite = resolve(frontend, 'node_modules', 'vite', 'bin', 'vite.js')
   const web = start(process.execPath, [vite, '--host', '127.0.0.1', '--port', '5173', '--strictPort'], frontend,
-    { ...process.env, VITE_AUTH_MODE: 'mock', VITE_API_BASE_URL: 'http://127.0.0.1:8000' })
+    { ...process.env, VITE_AUTH_MODE: 'mock', VITE_GOOGLE_CLIENT_ID: 'browser-test.apps.googleusercontent.com', VITE_API_BASE_URL: 'http://127.0.0.1:8000', VITE_DEMO_INSTRUCTOR_EMAIL: 'teacher@example.edu', VITE_DEMO_STUDENT_EMAIL: 'student1@example.edu' })
   await Promise.all([waitFor('http://127.0.0.1:8000/health', api), waitFor('http://127.0.0.1:5173', web)])
 
   const cli = resolve(frontend, 'node_modules', '@playwright', 'test', 'cli.js')

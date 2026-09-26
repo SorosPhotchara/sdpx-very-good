@@ -24,6 +24,23 @@ class Classroom(ClassroomBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 
+
+class InstructorApprovalCreate(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class InstructorApprovalRead(BaseModel):
+    email: str
+    source: str
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
 class StudentBase(BaseModel):
     email: EmailStr
     display_name: Optional[str] = None

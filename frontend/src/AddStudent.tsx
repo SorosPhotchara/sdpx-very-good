@@ -1,18 +1,19 @@
 import { useState, type FormEvent } from 'react'
 import { addStudent } from './api'
 import { useLanguage } from './i18n'
+import { useAsyncLock } from './useAsyncLock'
 
 export function AddStudent({ classroomId }: { classroomId: number }) {
   const { language } = useLanguage()
   const [email, setEmail] = useState('')
   const [groupName, setGroupName] = useState('')
   const [status, setStatus] = useState('')
-  const [saving, setSaving] = useState(false)
+  const action = useAsyncLock()
+  const saving = action.busy
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (saving) return
-    setSaving(true)
+    if (!action.begin()) return
     setStatus('')
     try {
       const student = await addStudent(classroomId, email.trim(), groupName.trim())
@@ -21,7 +22,7 @@ export function AddStudent({ classroomId }: { classroomId: number }) {
     } catch (error) {
       setStatus(error instanceof Error ? error.message : language === 'th' ? 'เพิ่มนักศึกษาไม่สำเร็จ' : 'Could not add student.')
     } finally {
-      setSaving(false)
+      action.finish()
     }
   }
 
@@ -33,7 +34,7 @@ export function AddStudent({ classroomId }: { classroomId: number }) {
     <label>{language === 'th' ? 'ชื่อกลุ่ม' : 'Group name'}
       <input required value={groupName} onChange={(event) => setGroupName(event.target.value)} />
     </label>
-    <button type="submit" disabled={saving}>{language === 'th' ? 'เพิ่มนักศึกษา' : 'Add student'}</button>
+    <button type="submit" disabled={saving} aria-busy={saving}>{saving ? (language === 'th' ? 'กำลังเพิ่มนักศึกษา...' : 'Adding student...') : (language === 'th' ? 'เพิ่มนักศึกษา' : 'Add student')}</button>
     {status && <p role="status">{status}</p>}
   </form>
 }

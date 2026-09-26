@@ -13,6 +13,14 @@ class Classroom(Base):
     groups = relationship("Group", back_populates="classroom")
     assignments = relationship("Assignment", back_populates="classroom")
 
+
+class InstructorApproval(Base):
+    __tablename__ = "instructor_approvals"
+
+    email = Column(String, primary_key=True)
+    approved_by = Column(String, nullable=False)
+    approved_at = Column(DateTime(timezone=True), nullable=False)
+
 class Group(Base):
     __tablename__ = "groups"
 

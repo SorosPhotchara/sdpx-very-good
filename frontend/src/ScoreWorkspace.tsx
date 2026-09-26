@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { downloadReportCsv, downloadReportXlsx, getAssignmentReport, getMyScores, type AssignmentReport, type StudentScore } from './api'
 import { useLanguage } from './i18n'
+import { useResource } from './useResource'
 
 function ScoreCells({ row }: { row: StudentScore }) {
   const { t } = useLanguage()
@@ -10,22 +11,17 @@ function ScoreCells({ row }: { row: StudentScore }) {
 
 export function ScoreWorkspace({ assignmentId, isInstructor }: { assignmentId: number; isInstructor: boolean }) {
   const { t, language } = useLanguage()
-  const [report, setReport] = useState<AssignmentReport | null>(null)
-  const [mine, setMine] = useState<StudentScore | null>(null)
+  const [opened, setOpened] = useState(false)
+  const resource = useResource<AssignmentReport | StudentScore>(`${assignmentId}:${isInstructor}`, () => isInstructor ? getAssignmentReport(assignmentId) : getMyScores(assignmentId), opened)
+  const report = isInstructor ? resource.data as AssignmentReport | null : null
+  const mine = !isInstructor ? resource.data as StudentScore | null : null
   const [error, setError] = useState('')
 
-  async function refresh() {
-    try {
-      if (isInstructor) setReport(await getAssignmentReport(assignmentId))
-      else setMine(await getMyScores(assignmentId))
-      setError('')
-    } catch (problem) { setError(problem instanceof Error ? problem.message : t('Scores could not be loaded.')) }
-  }
-
-  useEffect(() => { void refresh() }, [assignmentId, isInstructor])
-  return <details className="mt-3 rounded-xl border p-3 text-sm">
+  return <details onToggle={(event) => { if (event.currentTarget.open) setOpened(true) }} className="mt-3 rounded-xl border p-3 text-sm">
     <summary className="cursor-pointer font-medium">{t('Scores and coverage')}</summary>
-    <button type="button" onClick={() => void refresh()} className="my-2 text-blue-700">{t('Refresh scores')}</button>
+    <button type="button" disabled={resource.loading} onClick={() => { setError(''); void resource.refresh() }} className="my-2 text-blue-700">{t('Refresh scores')}</button>
+    {resource.loading && <p role="status">{language === 'th' ? 'กำลังโหลดคะแนน...' : 'Loading scores...'}</p>}
+    {resource.error && <p role="alert">{resource.error}</p>}
     {error && <p role="status">{error}</p>}
     {(mine || report) && <div className="overflow-x-auto"><table className="w-full text-left">
       <thead><tr><th className="p-2">{t('Student')}</th><th className="p-2">{t('Group work')}</th><th className="p-2">{t('Individual work')}</th><th className="p-2">{t('Group participation')}</th><th className="p-2">{t('Individual participation')}</th></tr></thead>

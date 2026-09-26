@@ -4,8 +4,11 @@ import { useLanguage } from './i18n'
 type GoogleClient = {
   accounts: {
     id: {
-      initialize(options: { client_id: string; callback: (response: { credential: string }) => void }): void
+      initialize(options: { client_id: string; auto_select: boolean; callback: (response: { credential: string }) => void }): void
       renderButton(element: HTMLElement, options: { theme: string; size: string }): void
+      prompt?(): void
+      cancel?(): void
+      disableAutoSelect?(): void
     }
   }
 }
@@ -13,7 +16,14 @@ type GoogleClient = {
 let initialized = false
 let credentialHandler: ((credential: string) => void) | null = null
 
-export function GoogleSignIn({ onSignIn }: { onSignIn: (credential: string) => void }) {
+export function cancelGoogleSignIn() {
+  const google = (window as typeof window & { google?: GoogleClient }).google
+  google?.accounts.id.cancel?.()
+  google?.accounts.id.disableAutoSelect?.()
+  credentialHandler = null
+}
+
+export function GoogleSignIn({ onSignIn, autoPrompt = false }: { onSignIn: (credential: string) => void; autoPrompt?: boolean }) {
   const { t } = useLanguage()
   const buttonRef = useRef<HTMLDivElement>(null)
   const handlerRef = useRef(onSignIn)
@@ -36,11 +46,13 @@ export function GoogleSignIn({ onSignIn }: { onSignIn: (credential: string) => v
       if (!initialized) {
         google.accounts.id.initialize({
           client_id: clientId,
+          auto_select: true,
           callback: (response) => credentialHandler?.(response.credential),
         })
         initialized = true
       }
       google.accounts.id.renderButton(buttonRef.current, { theme: 'outline', size: 'large' })
+      if (autoPrompt) google.accounts.id.prompt?.()
       rendered = true
     }
     const onError = () => active && setError('Google sign-in could not load.')
@@ -62,8 +74,9 @@ export function GoogleSignIn({ onSignIn }: { onSignIn: (credential: string) => v
       script?.removeEventListener('load', start)
       script?.removeEventListener('error', onError)
       credentialHandler = null
+      if (autoPrompt) (window as typeof window & { google?: GoogleClient }).google?.accounts.id.cancel?.()
     }
-  }, [])
+  }, [autoPrompt])
 
   return error ? <p role="status">{t(error)}</p> : <div ref={buttonRef} data-testid="google-sign-in" />
 }

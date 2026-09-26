@@ -12,12 +12,12 @@ Implementation tracker based on [the PRD](project-idea/pairwise_evaluation_prd.m
 - Use pairwise instructor evaluation in the first release; direct numeric grading is outside that release.
 - Allow group reassignment only before the deadline.
 - Permit classroom creation only for instructor accounts approved in advance by an administrator.
-- Host FastAPI separately from the Vercel frontend. The API host is not chosen yet.
+- Host the frontend and FastAPI API together using Vercel Services, with Neon PostgreSQL through the Vercel Marketplace (confirmed by the owner).
 - A student can belong to multiple classrooms. Email uniqueness is per classroom, and the verified Google email activates all matching pending memberships on first login.
 - Use five response levels with an equal/tie choice. Left/right points are `1/0`, `.75/.25`, `.5/.5`, `.25/.75`, and `0/1`.
 - Cover every eligible pair at least five times before optimizing evaluator load balance. Do not offer individual evaluation to groups with fewer than three members.
 - Preserve the four prototype classrooms in PostgreSQL; the old database file is no longer part of the application.
-- Choose the API and PostgreSQL hosting provider later; focus on a local runnable system now.
+- Use Vercel for deployment; account login, Neon provisioning and the staging Google OAuth origin remain external setup.
 - Set separate Group and Individual deadlines and participation score maxima per assignment. Students in groups with fewer than three members are exempt from an individual participation penalty.
 - Treat participation as a separate score component. A new submission replaces the prior submission snapshot for that page; submitting collects the latest saved draft answers for that page.
 - Show an interim item without votes as "no data"; only the final calculation may show zero for an unscored item.
@@ -33,7 +33,7 @@ Implementation tracker based on [the PRD](project-idea/pairwise_evaluation_prd.m
 - [x] D6 — The first release uses pairwise instructor evaluation only.
 - [x] D7 — Group reassignment is allowed only before the deadline.
 - [x] D8 — Administrator-approved instructor accounts can create classrooms; pending CSV students activate on first login.
-- [x] D9 — FastAPI runs separately from Vercel; choose a provider after local workflows work.
+- [x] D9 — Vercel Services hosts frontend and API; Neon provides persistent PostgreSQL through the marketplace. Deployment configuration is prepared.
 
 ## 1. Establish a reliable development baseline
 
@@ -51,7 +51,7 @@ Implementation tracker based on [the PRD](project-idea/pairwise_evaluation_prd.m
 
 ## 3. Instructor setup flow
 
-- [ ] Implement Google login, session handling, role checks, and classroom isolation. Google ID token verification, approved-instructor allowlist, role isolation, sign-out, and expiry re-sign-in are implemented; automatic renewal and live Google configuration remain.
+- [ ] Implement Google login, session handling, role checks, and classroom isolation. Token verification, role isolation, expiry, renewal prompts, account continuity and sign-out cancellation are implemented. Google SDK lifecycle is browser-tested; live Google authentication on the deployed origin remains unverified.
 - [x] Create and list classrooms; invite and remove allowlisted instructors with access checks and last-instructor protection.
 - [x] Import students from CSV (`email`, `groupname`), report row errors, avoid duplicates, create groups, and activate pending memberships on first verified login.
 - [x] Create and edit unpublished assignments with separate group and individual criteria, weights totaling 100% per section, score maxima, deadlines, and instructor vote weight.
@@ -76,11 +76,11 @@ Implementation tracker based on [the PRD](project-idea/pairwise_evaluation_prd.m
 
 ## 6. Release verification
 
-- [ ] Cover the full instructor-to-student workflow with API, frontend, and end-to-end tests.
-- [ ] Verify authorization, peer anonymity, CSV/spreadsheet safety, score examples, and reassignment history. Backend tests cover all five areas; browser-level confirmation remains.
-- [ ] Check the PRD targets with a classroom of 200 students and 10 groups, including evaluation page load and pre-deadline traffic. The benchmark now runs against an isolated PostgreSQL schema; browser rendering and concurrent traffic remain to verify.
+- [x] Cover the full instructor-to-student workflow with API, frontend, and end-to-end tests, including publication, partial submission, scores, exports, reassignment, loading, retries and duplicate-action guards.
+- [x] Verify authorization, peer anonymity, CSV/spreadsheet safety, score examples, and reassignment history. Backend tests cover all five areas; browser E2E confirms forbidden report/outsider access, pseudonymous CSV evaluator labels, unsafe roster rejection, escaped CSV exports, and the displayed reassignment history.
+- [ ] Check the PRD targets with 200 students and 10 groups. Local browser rendering and 20 concurrent evaluation reads pass the 2-second target. Production latency and the pre-deadline uptime target require staging/production measurements.
 - [ ] Deploy the frontend, API, and persistent database according to D1 and D9; verify health, migrations, login, evaluation, and report export in staging.
 
 ## Current implementation snapshot
 
-The repository now has a bilingual React/Vite instructor/student workflow and a FastAPI backend with Google token verification, development-only mock sign-in, roster import, assignment publication, draft and submission snapshots, score calculation, reports, instructor votes, group reassignment, audit, notifications, and CSV/XLSX exports. Docker runs only PostgreSQL 17; frontend and backend run separately on the host. PostgreSQL migrations, demo seed, 37 backend tests using isolated schemas, five frontend API tests, TypeScript lint, production build, and HTTP smoke checks are verified. Remaining release work includes live Google configuration, browser end-to-end coverage, concurrent traffic checks, and staging deployment after the host is chosen.
+The bilingual React/Vite and FastAPI workflows include loading/error states, action locks, lazy panels, stale-response protection and Google renewal prompts. Verification: 39 backend tests, 6 frontend API tests, TypeScript lint and production build pass. Browser E2E covers full workflows, responsive layouts, resource lifecycles, Google SDK cancellation and a 200-student classroom with 20 concurrent reads. Vercel Services configuration and DEPLOYMENT.md are prepared. Deployment remains pending Vercel account authentication, a persistent Neon database and Google OAuth configuration for the deployed origin.

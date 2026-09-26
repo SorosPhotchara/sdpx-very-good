@@ -5,6 +5,9 @@
 **/node_modules
 **/dist
 **/.env
+**/.env.*
+.vercel
+**/.vercel
 frontend/test-results
 frontend/playwright-report
 __pycache__
