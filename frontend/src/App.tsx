@@ -162,7 +162,7 @@ export default function App() {
 
   return <div className="app-shell"><a className="skip-link" href="#main-content">{language === 'th' ? 'ข้ามไปเนื้อหาหลัก' : 'Skip to main content'}</a>
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark">P<span>●</span></span><span>PairEval<small>{language === 'th' ? 'ระบบประเมินแบบเปรียบเทียบคู่' : 'Pairwise evaluation'}</small></span></div>
+      <div className="brand"><span className="brand-mark">P<span>●</span></span><span>PairEval</span><small>{language === 'th' ? 'ระบบประเมินแบบเปรียบเทียบคู่' : 'Pairwise evaluation'}</small></div>
       <div className="sidebar-label">{t('Classrooms')} <span>{classrooms.length.toString().padStart(2, '0')}</span></div>
       <nav aria-label={t('Classrooms')} className="classroom-list">
         {classrooms.map((item, index) => <button key={item.id} type="button" aria-current={selectedId === item.id ? 'page' : undefined} className={'classroom-link ' + (selectedId === item.id ? 'active' : '')} onClick={() => { setSelectedId(item.id); setShowSettings(false) }}>
