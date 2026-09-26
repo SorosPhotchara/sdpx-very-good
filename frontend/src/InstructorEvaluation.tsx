@@ -5,6 +5,7 @@ import {
 import { useLanguage } from './i18n'
 import { useResource } from './useResource'
 import { useAsyncLock } from './useAsyncLock'
+import { ToastNotice, useNotice } from './components/ui/toast'
 
 const choices = ['Strongly left', 'Slightly left', 'Equal', 'Slightly right', 'Strongly right']
 
@@ -29,7 +30,7 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
   const [criterionId, setCriterionId] = useState(0)
   const [leftId, setLeftId] = useState(0)
   const [rightId, setRightId] = useState(0)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useNotice()
   const [savingPairIds, setSavingPairIds] = useState<Set<number>>(() => new Set())
   const pendingVotes = useRef(new Set<number>())
   const action = useAsyncLock()
@@ -49,7 +50,7 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
       resource.setData((current) => current ? { ...current, pairs: assigned } : current)
       setMessage(t('Instructor pair assigned.'))
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not assign pair.')
+      setMessage(error instanceof Error ? error.message : 'Could not assign pair.', 'error')
     } finally {
       action.finish()
     }
@@ -66,7 +67,7 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
       setMessage(t('Vote saved.'))
     } catch (error) {
       updateChoice(pairId, previousChoice)
-      setMessage(error instanceof Error ? error.message : 'Could not save vote.')
+      setMessage(error instanceof Error ? error.message : 'Could not save vote.', 'error')
     } finally {
       pendingVotes.current.delete(pairId)
       setSavingPairIds((current) => { const next = new Set(current); next.delete(pairId); return next })
@@ -100,6 +101,6 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
           onChange={() => void vote(pair.pair_id, index + 1)} /><span>{t(label)}</span>
       </label>)}</div>
     </fieldset>)}</div>
-    {message && <p role="status" className="mt-2">{message}</p>}
+    <ToastNotice notice={message} />
   </div>
 }

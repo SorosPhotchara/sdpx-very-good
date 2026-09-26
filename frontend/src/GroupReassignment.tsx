@@ -3,6 +3,7 @@ import { getGroups, getNotifications, getReassignments, getStudents, reassignStu
 import { useLanguage } from './i18n'
 import { useResource } from './useResource'
 import { useAsyncLock } from './useAsyncLock'
+import { ToastNotice, useNotice } from './components/ui/toast'
 import { Button } from './components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './components/ui/alert-dialog'
 
@@ -19,7 +20,7 @@ export function GroupReassignment({ classroomId, isInstructor }: { classroomId: 
   const { students = [], groups = [], history = [], notifications = [] } = resource.data ?? {}
   const [studentId, setStudentId] = useState(0)
   const [groupId, setGroupId] = useState(0)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useNotice()
   const [confirmMove, setConfirmMove] = useState(false)
   const action = useAsyncLock()
   const moving = action.busy
@@ -31,7 +32,7 @@ export function GroupReassignment({ classroomId, isInstructor }: { classroomId: 
       const result = await reassignStudent(classroomId, studentId, groupId)
       await resource.refresh()
       setMessage(language === 'th' ? 'ย้ายแล้ว ปรับคู่ ' + result.changed_pairs + ' รายการ และแจ้งนักศึกษา ' + result.notified_students + ' คน' : 'Moved student. ' + result.changed_pairs + ' pair records changed; ' + result.notified_students + ' students notified.')
-    } catch (error) { setMessage(error instanceof Error ? error.message : t('Could not move student.')) }
+    } catch (error) { setMessage(error instanceof Error ? error.message : t('Could not move student.'), 'error') }
     finally { action.finish() }
   }
 
@@ -59,6 +60,6 @@ export function GroupReassignment({ classroomId, isInstructor }: { classroomId: 
       </AlertDialog>
     </div>
     {history.length > 0 && <div className="mt-3"><h4 className="font-medium">{t('Recent moves')}</h4>{history.slice(0, 10).map((item) => <p key={item.id}>{t('Student')} #{item.student_id}: {t('Group')} #{item.old_group_id} → #{item.new_group_id} ({date(item.changed_at)})</p>)}</div>}
-    {message && <p role="status" className="mt-2">{message}</p>}
+    <ToastNotice notice={message} />
   </details>
 }

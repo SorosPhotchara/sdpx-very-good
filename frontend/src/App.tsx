@@ -6,6 +6,7 @@ import { cancelGoogleSignIn, GoogleSignIn } from './GoogleSignIn'
 import { useLanguage } from './i18n'
 import { useResource } from './useResource'
 import { useAsyncLock } from './useAsyncLock'
+import { ToastNotice, useNotice } from './components/ui/toast'
 
 const AssignmentWorkspace = lazy(() => import('./AssignmentWorkspace').then((module) => ({ default: module.AssignmentWorkspace })))
 const GroupReassignment = lazy(() => import('./GroupReassignment').then((module) => ({ default: module.GroupReassignment })))
@@ -57,8 +58,8 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [newClassroom, setNewClassroom] = useState('')
-  const [error, setError] = useState('')
-  const [rosterStatus, setRosterStatus] = useState<Record<number, string>>({})
+  const [error, setError] = useNotice()
+  const [feedback, setFeedback] = useNotice()
   const [instructorInput, setInstructorInput] = useState('')
   const [showSettings, setShowSettings] = useState(false)
   const [showClassroomForm, setShowClassroomForm] = useState(false)
@@ -89,7 +90,8 @@ export default function App() {
     setCurrentUser(null)
     setClassrooms([])
     setSelectedId(null)
-    setError(message)
+    setFeedback('')
+    setError(message, 'error')
   }
 
   function scheduleSessionEnd(token: string) {
@@ -134,7 +136,8 @@ export default function App() {
       setNewClassroom('')
       setShowClassroomForm(false)
       setError('')
-    } catch { if (version === sessionVersion.current) setError(language === 'th' ? 'สร้างห้องเรียนไม่สำเร็จ' : 'Could not create the classroom.') }
+      setFeedback(language === 'th' ? 'สร้างห้องเรียนแล้ว' : 'Classroom created.')
+    } catch { if (version === sessionVersion.current) setError(language === 'th' ? 'สร้างห้องเรียนไม่สำเร็จ' : 'Could not create the classroom.', 'error') }
     finally { classroomAction.finish() }
   }
 
@@ -152,6 +155,7 @@ export default function App() {
     const remaining = classrooms.filter(item => item.id !== classroomId)
     setSelectedId(current => current === classroomId ? remaining.find(item => item.name === 'PairEval Demo')?.id ?? remaining[0]?.id ?? null : current)
     setShowSettings(false)
+    setFeedback(language === 'th' ? 'ลบห้องเรียนแล้ว' : 'Classroom deleted.')
   }
 
   async function handleRosterFile(classroomId: number, file: File) {
@@ -160,8 +164,8 @@ export default function App() {
     try {
       const result = await importRoster(classroomId, await file.text())
       if (version !== sessionVersion.current) return
-      setRosterStatus((items) => ({ ...items, [classroomId]: result.errors.length ? result.errors.join('; ') : language === 'th' ? 'นำเข้านักศึกษา ' + result.imported + ' คนแล้ว' : 'Imported ' + result.imported + ' students.' }))
-    } catch { if (version === sessionVersion.current) setRosterStatus((items) => ({ ...items, [classroomId]: language === 'th' ? 'นำเข้า CSV ไม่สำเร็จ' : 'Roster import failed.' })) }
+      setFeedback(result.errors.length ? result.errors.join('; ') : language === 'th' ? 'นำเข้านักศึกษา ' + result.imported + ' คนแล้ว' : 'Imported ' + result.imported + ' students.', result.errors.length ? 'error' : 'success')
+    } catch { if (version === sessionVersion.current) setFeedback(language === 'th' ? 'นำเข้า CSV ไม่สำเร็จ' : 'Roster import failed.', 'error') }
     finally { rosterAction.finish() }
   }
 
@@ -174,7 +178,8 @@ export default function App() {
       setClassrooms((items) => items.map((item) => item.id === classroomId ? updated : item))
       setInstructorInput('')
       setError('')
-    } catch (problem) { if (version === sessionVersion.current) setError(problem instanceof Error ? problem.message : language === 'th' ? 'แก้ไขรายชื่ออาจารย์ไม่สำเร็จ' : 'Could not update instructors.') }
+      setFeedback(language === 'th' ? (remove ? 'นำอาจารย์ออกแล้ว' : 'เชิญอาจารย์แล้ว') : (remove ? 'Instructor removed.' : 'Instructor invited.'))
+    } catch (problem) { if (version === sessionVersion.current) setError(problem instanceof Error ? problem.message : language === 'th' ? 'แก้ไขรายชื่ออาจารย์ไม่สำเร็จ' : 'Could not update instructors.', 'error') }
     finally { instructorAction.finish() }
   }
 
@@ -212,7 +217,8 @@ export default function App() {
           <GoogleSignIn autoPrompt onSignIn={(token) => void handleSignIn(token, true)} />
         </section>}
         {signInAction.busy && <p role="status">{t('Signing in...')}</p>}
-        {error && <p role="status" className="notice error">{error}</p>}
+        <ToastNotice notice={error} />
+        <ToastNotice notice={feedback} />
         {restoring ? <p role="status">{language === 'th' ? 'กำลังกู้คืนการเข้าสู่ระบบ...' : 'Restoring sign-in...'}</p> : !currentUser ? <section className="welcome-layout">
           <div className="welcome-copy"><span className="eyebrow">{language === 'th' ? 'พื้นที่ประเมินแบบเปรียบเทียบคู่' : 'Pairwise evaluation workspace'}</span><h1>{language === 'th' ? <>มองทุกผลงาน<br /><em>อย่างเป็นธรรม</em></> : <>A fairer view<br />of every <em>contribution.</em></>}</h1><p>{language === 'th' ? 'เปรียบเทียบผลงานเป็นคู่ ติดตามความคืบหน้า และดูคะแนนในพื้นที่เดียว' : 'Compare work in pairs, track progress, and review scores in one place.'}</p></div>
           <div className="login-panel"><div className="panel-number">01 / ACCESS</div><h2>{language === 'th' ? 'เข้าสู่พื้นที่การเรียนรู้' : 'Enter your workspace'}</h2><p>{language === 'th' ? 'เลือกบทบาทเพื่อทดลองระบบด้วยข้อมูลตัวอย่าง' : 'Choose a role to explore the sample workspace.'}</p>
@@ -224,7 +230,7 @@ export default function App() {
           {currentUser.is_admin && <Suspense fallback={<WorkspaceLoading />}><AdminDashboard health={health} classroomRevision={JSON.stringify(classrooms.map(item => [item.id, item.name]))} /></Suspense>}
           {selected ? <div className="workspace-grid"><div className="workspace-main"><div className="section-heading"><span className="section-count">01</span><h2>{t('Assignments')}</h2><span className="heading-rule" /></div><Suspense fallback={<WorkspaceLoading />}><AssignmentWorkspace key={selected.id} classroomId={selected.id} isInstructor={canManage} email={currentUser.email} /></Suspense></div>
             <aside className="workspace-side" data-testid="workspace-side"><div className="info-panel"><span className="panel-number">CLASSROOM / {String(selected.id).padStart(2, '0')}</span><h3>{language === 'th' ? 'รายละเอียดห้องเรียน' : 'Classroom details'}</h3><div className="info-row"><span>{language === 'th' ? 'รหัสห้อง' : 'Class ID'}</span><strong>#{selected.id}</strong></div><div className="info-row"><span>{language === 'th' ? 'อาจารย์' : 'Instructors'}</span><strong>{selected.instructor_emails.split(',').filter(Boolean).length}</strong></div></div>
-              {canManage && <div className="side-tools"><Button type="button" variant="outline" className="tools-toggle" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings} aria-controls="classroom-tools">{language === 'th' ? 'จัดการห้องเรียน' : 'Manage classroom'} <span>{showSettings ? '−' : '＋'}</span></Button>{showSettings && <div id="classroom-tools" className="tools-content"><Suspense fallback={<WorkspaceLoading />}><ClassroomSettings key={selected.id} classroom={selected} onRename={name => renameSelectedClassroom(selected.id, name)} onDelete={() => deleteSelectedClassroom(selected.id, selected.name)} /></Suspense><label>{language === 'th' ? 'นำเข้ารายชื่อนักศึกษา (CSV)' : 'Import student roster (CSV)'}<Input disabled={rosterAction.busy} aria-busy={rosterAction.busy} type="file" accept=".csv,text/csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleRosterFile(selected.id, file) }} /></label>{rosterStatus[selected.id] && <p role="status">{rosterStatus[selected.id]}</p>}<Suspense fallback={<WorkspaceLoading />}><AddStudent key={selected.id} classroomId={selected.id} /></Suspense><div className="instructor-list"><strong>{language === 'th' ? 'อาจารย์ในห้อง' : 'Classroom instructors'}</strong>{selected.instructor_emails.split(',').filter(Boolean).map((email) => <div key={email}><span>{email}</span><Button type="button" variant="outline" disabled={instructorAction.busy} onClick={() => void changeInstructor(selected.id, email, true)}>{t('Remove')}</Button></div>)}</div><form onSubmit={(event) => { event.preventDefault(); void changeInstructor(selected.id, instructorInput, false) }}><Input type="email" aria-label={language === 'th' ? 'อีเมลอาจารย์' : 'Instructor email'} placeholder={language === 'th' ? 'อีเมลอาจารย์ที่อนุมัติ' : 'Approved instructor email'} value={instructorInput} onChange={(event) => setInstructorInput(event.target.value)} /><Button type="submit" disabled={instructorAction.busy} aria-busy={instructorAction.busy}>{instructorAction.busy ? t('Working...') : language === 'th' ? 'เชิญ' : 'Invite'}</Button></form><Suspense fallback={<WorkspaceLoading />}><GroupReassignment classroomId={selected.id} isInstructor /></Suspense></div>}</div>}
+              {canManage && <div className="side-tools"><Button type="button" variant="outline" className="tools-toggle" onClick={() => setShowSettings((value) => !value)} aria-expanded={showSettings} aria-controls="classroom-tools">{language === 'th' ? 'จัดการห้องเรียน' : 'Manage classroom'} <span>{showSettings ? '−' : '＋'}</span></Button>{showSettings && <div id="classroom-tools" className="tools-content"><Suspense fallback={<WorkspaceLoading />}><ClassroomSettings key={selected.id} classroom={selected} onRename={name => renameSelectedClassroom(selected.id, name)} onDelete={() => deleteSelectedClassroom(selected.id, selected.name)} /></Suspense><label>{language === 'th' ? 'นำเข้ารายชื่อนักศึกษา (CSV)' : 'Import student roster (CSV)'}<Input disabled={rosterAction.busy} aria-busy={rosterAction.busy} type="file" accept=".csv,text/csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleRosterFile(selected.id, file) }} /></label><Suspense fallback={<WorkspaceLoading />}><AddStudent key={selected.id} classroomId={selected.id} /></Suspense><div className="instructor-list"><strong>{language === 'th' ? 'อาจารย์ในห้อง' : 'Classroom instructors'}</strong>{selected.instructor_emails.split(',').filter(Boolean).map((email) => <div key={email}><span>{email}</span><Button type="button" variant="outline" disabled={instructorAction.busy} onClick={() => void changeInstructor(selected.id, email, true)}>{t('Remove')}</Button></div>)}</div><form onSubmit={(event) => { event.preventDefault(); void changeInstructor(selected.id, instructorInput, false) }}><Input type="email" aria-label={language === 'th' ? 'อีเมลอาจารย์' : 'Instructor email'} placeholder={language === 'th' ? 'อีเมลอาจารย์ที่อนุมัติ' : 'Approved instructor email'} value={instructorInput} onChange={(event) => setInstructorInput(event.target.value)} /><Button type="submit" disabled={instructorAction.busy} aria-busy={instructorAction.busy}>{instructorAction.busy ? t('Working...') : language === 'th' ? 'เชิญ' : 'Invite'}</Button></form><Suspense fallback={<WorkspaceLoading />}><GroupReassignment classroomId={selected.id} isInstructor /></Suspense></div>}</div>}
               {!canManage && <Suspense fallback={<WorkspaceLoading />}><GroupReassignment classroomId={selected.id} isInstructor={false} /></Suspense>}
               <div className="side-quote"><span>“</span><p>{language === 'th' ? 'ทุกความคิดเห็นช่วยให้เห็นภาพที่ครบขึ้น' : 'Every perspective makes the picture clearer.'}</p><small>PAIREVAL / 2026</small></div>
             </aside></div> : currentUser.is_admin ? null : <div className="empty-state">{language === 'th' ? 'เลือกห้องเรียนจากแถบด้านซ้าย' : 'Select a classroom from the sidebar.'}</div>}

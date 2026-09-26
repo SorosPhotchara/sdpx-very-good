@@ -11,6 +11,7 @@ import { InstructorEvaluation } from './InstructorEvaluation'
 import { useLanguage } from './i18n'
 import { useResource } from './useResource'
 import { useAsyncLock } from './useAsyncLock'
+import { ToastNotice, useNotice } from './components/ui/toast'
 
 type CriterionDraft = { name: string; weight: string }
 type SectionDraft = {
@@ -107,7 +108,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
   const [group, setGroup] = useState<SectionDraft>({ score: '10', participation: '0', deadline: '', criteria: [{ name: 'Quality', weight: '100' }] })
   const [individual, setIndividual] = useState<SectionDraft>({ score: '0', participation: '0', deadline: '', criteria: [] })
   const [instructorWeight, setInstructorWeight] = useState('1')
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useNotice()
   const action = useAsyncLock()
   const busy = action.busy
   const [editId, setEditId] = useState<number | null>(null)
@@ -124,7 +125,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
       if (active && Math.abs(total - 100) >= 0.001) {
         setStatus(language === 'th'
           ? `น้ำหนักเกณฑ์${label}รวม ${total}% ต้องรวม 100%`
-          : `${label} weights total ${total}%; they must total 100%.`)
+          : `${label} weights total ${total}%; they must total 100%.`, 'error')
         return
       }
     }
@@ -148,7 +149,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
       setEditId(null)
       setStatus(t(editId == null ? 'Assignment created.' : 'Assignment updated.'))
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Could not create assignment.')
+      setStatus(error instanceof Error ? error.message : 'Could not create assignment.', 'error')
     } finally {
       action.finish()
     }
@@ -175,9 +176,9 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
         firstInput?.focus({ preventScroll: true })
         firstInput?.scrollIntoView({ block: 'nearest' })
       }
-      setStatus(language === 'th' ? 'กำลังแก้ไข ' + setup.title + ' เปิดแบบฟอร์มด้านล่าง' : 'Editing ' + setup.title + '. Open the assignment form below.')
+      setStatus(language === 'th' ? 'กำลังแก้ไข ' + setup.title + ' เปิดแบบฟอร์มด้านล่าง' : 'Editing ' + setup.title + '. Open the assignment form below.', 'info')
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Could not load assignment setup.')
+      setStatus(error instanceof Error ? error.message : 'Could not load assignment setup.', 'error')
     } finally {
       action.finish()
     }
@@ -196,7 +197,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
       if (!shouldPublish) {
         const result = await previewAssignment(assignmentId)
         setPairPreviews((current) => ({ ...current, [assignmentId]: result }))
-        setStatus(language === 'th' ? `ตัวอย่างแผนมี ${result.pair_assignments} งานประเมิน` : `Preview contains ${result.pair_assignments} pair assignments.`)
+        setStatus(language === 'th' ? `ตัวอย่างแผนมี ${result.pair_assignments} งานประเมิน` : `Preview contains ${result.pair_assignments} pair assignments.`, 'info')
         return
       }
         const result = await publishAssignment(assignmentId)
@@ -205,7 +206,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
       await resource.refresh()
       setStatus(language === 'th' ? (shouldPublish ? 'เผยแพร่' : 'ตัวอย่าง') + 'คู่ประเมิน ' + result.pair_assignments + ' รายการ' : result.pair_assignments + ' pair assignments ' + (shouldPublish ? 'published' : 'in preview') + '.')
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Pair operation failed.')
+      setStatus(error instanceof Error ? error.message : 'Pair operation failed.', 'error')
     } finally {
       action.finish()
       setPairAction(null)
@@ -256,6 +257,6 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
         </fieldset>
       </form>
     </details>}
-    {status && <p role="status" className="text-sm">{status}</p>}
+    <ToastNotice notice={status} />
   </div>
 }

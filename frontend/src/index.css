@@ -1,5 +1,6 @@
 @import "../assets/styles.css";
 @import "../assets/responsive-layout.css";
+@import "../assets/toast.css";
 
 @tailwind base;
 @tailwind components;

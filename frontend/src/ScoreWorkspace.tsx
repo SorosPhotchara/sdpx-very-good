@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { downloadReportCsv, downloadReportXlsx, getAssignmentReport, getMyScores, type AssignmentReport, type StudentScore } from './api'
 import { useLanguage } from './i18n'
 import { useResource } from './useResource'
+import { ToastNotice, useNotice } from './components/ui/toast'
 
 function ScoreCells({ row }: { row: StudentScore }) {
   const { t } = useLanguage()
@@ -15,22 +16,22 @@ export function ScoreWorkspace({ assignmentId, isInstructor }: { assignmentId: n
   const resource = useResource<AssignmentReport | StudentScore>(`${assignmentId}:${isInstructor}`, () => isInstructor ? getAssignmentReport(assignmentId) : getMyScores(assignmentId), opened)
   const report = isInstructor ? resource.data as AssignmentReport | null : null
   const mine = !isInstructor ? resource.data as StudentScore | null : null
-  const [error, setError] = useState('')
+  const [error, setError] = useNotice()
 
   return <details onToggle={(event) => { if (event.currentTarget.open) setOpened(true) }} className="mt-3 rounded-xl border p-3 text-sm">
     <summary className="cursor-pointer font-medium">{t('Scores and coverage')}</summary>
     <button type="button" disabled={resource.loading} onClick={() => { setError(''); void resource.refresh() }} className="my-2 text-blue-700">{t('Refresh scores')}</button>
     {resource.loading && <p role="status">{language === 'th' ? 'กำลังโหลดคะแนน...' : 'Loading scores...'}</p>}
     {resource.error && <p role="alert">{resource.error}</p>}
-    {error && <p role="status">{error}</p>}
+    <ToastNotice notice={error} />
     {(mine || report) && <div className="score-table-scroll overflow-x-auto" role="region" aria-label={t('Scores and coverage')} tabIndex={0}><table className="w-full text-left">
       <thead><tr><th className="p-2">{t('Student')}</th><th className="p-2">{t('Group work')}</th><th className="p-2">{t('Individual work')}</th><th className="p-2">{t('Group participation')}</th><th className="p-2">{t('Individual participation')}</th></tr></thead>
       <tbody>{(report?.students ?? (mine ? [mine] : [])).map((row) => <tr key={row.student_id} className="border-t"><td className="p-2">{row.email}</td><ScoreCells row={row} /></tr>)}</tbody>
     </table></div>}
     {report && <p className="mt-2 text-slate-500">{t('Group')}: {t(report.group_final ? 'Final' : 'Interim — may change')} · {t('Individual')}: {t(report.individual_final ? 'Final' : 'Interim — may change')}</p>}
     {report && <div className="mt-2 flex flex-wrap gap-3">{(['groups', 'students', 'pairs'] as const).map((sheet) =>
-      <button key={sheet} type="button" className="text-blue-700" onClick={() => void downloadReportCsv(assignmentId, sheet).catch(() => setError(t('Export failed.')))}>{language === 'th' ? 'ส่งออก' : 'Export'} {t(sheet)} CSV</button>
-    )}<button type="button" className="text-blue-700" onClick={() => void downloadReportXlsx(assignmentId).catch(() => setError(t('Export failed.')))}>{language === 'th' ? 'ส่งออก Excel' : 'Export Excel'}</button></div>}
+      <button key={sheet} type="button" className="text-blue-700" onClick={() => void downloadReportCsv(assignmentId, sheet).catch(() => setError(t('Export failed.'), 'error'))}>{language === 'th' ? 'ส่งออก' : 'Export'} {t(sheet)} CSV</button>
+    )}<button type="button" className="text-blue-700" onClick={() => void downloadReportXlsx(assignmentId).catch(() => setError(t('Export failed.'), 'error'))}>{language === 'th' ? 'ส่งออก Excel' : 'Export Excel'}</button></div>}
     {report && <p className="mt-2">{t('Pairs missing target coverage')}: {report.coverage.filter((pair) => pair.missing_to_five > 0).length}/{report.coverage.length}</p>}
     {report && <details className="mt-2"><summary className="cursor-pointer">{t('Criterion details and effective votes')}</summary>
       <div className="report-details-scroll max-h-72 overflow-auto" role="region" aria-label={t('Criterion details and effective votes')} tabIndex={0}><table className="w-full text-left"><thead><tr><th>{t('Section')}</th><th>{t('Criterion')}</th><th>{t('Item ID')}</th><th>{t('Weighted score')}</th><th>{t('Effective votes')}</th></tr></thead>

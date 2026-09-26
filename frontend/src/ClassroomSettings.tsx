@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { type Classroom } from './api'
 import { useLanguage } from './i18n'
 import { useAsyncLock } from './useAsyncLock'
+import { ToastNotice, useNotice } from './components/ui/toast'
 import { Button } from './components/ui/button'
 import { Input } from './components/ui/input'
 import { Label } from './components/ui/label'
@@ -17,8 +18,8 @@ export function ClassroomSettings({ classroom, onRename, onDelete }: {
   const [name, setName] = useState(classroom.name)
   const [confirmation, setConfirmation] = useState('')
   const [open, setOpen] = useState(false)
-  const [status, setStatus] = useState('')
-  const [deleteError, setDeleteError] = useState('')
+  const [status, setStatus] = useNotice()
+  const [deleteError, setDeleteError] = useNotice()
   const action = useAsyncLock()
 
   async function rename(event: FormEvent) {
@@ -26,7 +27,7 @@ export function ClassroomSettings({ classroom, onRename, onDelete }: {
     if (!name.trim() || !action.begin()) return
     setStatus('')
     try { await onRename(name.trim()); setStatus(text('เปลี่ยนชื่อห้องแล้ว', 'Classroom renamed.')) }
-    catch (error) { setStatus(error instanceof Error ? error.message : text('เปลี่ยนชื่อไม่สำเร็จ', 'Rename failed.')) }
+    catch (error) { setStatus(error instanceof Error ? error.message : text('เปลี่ยนชื่อไม่สำเร็จ', 'Rename failed.'), 'error') }
     finally { action.finish() }
   }
 
@@ -34,7 +35,7 @@ export function ClassroomSettings({ classroom, onRename, onDelete }: {
     if (confirmation.trim() !== classroom.name || !action.begin()) return
     setDeleteError('')
     try { await onDelete(); setOpen(false) }
-    catch (error) { setDeleteError(error instanceof Error ? error.message : text('ลบห้องไม่สำเร็จ', 'Deletion failed.')) }
+    catch (error) { setDeleteError(error instanceof Error ? error.message : text('ลบห้องไม่สำเร็จ', 'Deletion failed.'), 'error') }
     finally { action.finish() }
   }
 
@@ -44,7 +45,7 @@ export function ClassroomSettings({ classroom, onRename, onDelete }: {
       <Input id="classroom-name" data-testid="classroom-name" required value={name} disabled={action.busy} onChange={event => setName(event.target.value)} />
       <Button type="submit" variant="outline" data-testid="rename-classroom" disabled={action.busy || !name.trim() || name.trim() === classroom.name} aria-busy={action.busy}>{text('บันทึกชื่อห้อง', 'Save classroom name')}</Button>
     </form>
-    {status && <p role="status">{status}</p>}
+    <ToastNotice notice={status} />
     <AlertDialog open={open} onOpenChange={value => { if (!action.busy) { setOpen(value); setConfirmation(''); setDeleteError('') } }}>
       <AlertDialogTrigger asChild><Button type="button" variant="outline" className="text-destructive" data-testid="delete-classroom" disabled={action.busy}>{text('ลบห้องเรียน', 'Delete classroom')}</Button></AlertDialogTrigger>
       <AlertDialogContent data-testid="delete-classroom-dialog">
@@ -54,7 +55,7 @@ export function ClassroomSettings({ classroom, onRename, onDelete }: {
         </AlertDialogHeader>
         <Label htmlFor="confirm-classroom-name">{text('พิมพ์ชื่อห้องเพื่อยืนยัน', 'Type classroom name to confirm')}</Label>
         <Input id="confirm-classroom-name" data-testid="confirm-classroom-name" value={confirmation} disabled={action.busy} onChange={event => setConfirmation(event.target.value)} autoComplete="off" />
-        {deleteError && <p role="alert">{deleteError}</p>}
+        <ToastNotice notice={deleteError} assertive />
         <AlertDialogFooter>
           <AlertDialogCancel disabled={action.busy}>{text('ยกเลิก', 'Cancel')}</AlertDialogCancel>
           <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" data-testid="confirm-delete-classroom" disabled={action.busy || confirmation.trim() !== classroom.name} aria-busy={action.busy} onClick={event => { event.preventDefault(); void remove() }}>{text(action.busy ? 'กำลังดำเนินการ...' : 'ลบห้องถาวร', action.busy ? 'Working...' : 'Permanently delete classroom')}</AlertDialogAction>

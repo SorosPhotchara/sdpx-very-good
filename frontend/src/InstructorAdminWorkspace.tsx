@@ -6,6 +6,7 @@ import { approveInstructor, getInstructorApprovals, revokeInstructor } from './a
 import { useLanguage } from './i18n'
 import { useResource } from './useResource'
 import { useAsyncLock } from './useAsyncLock'
+import { ToastNotice, useNotice } from './components/ui/toast'
 
 export function InstructorAdminWorkspace() {
   const { language, t } = useLanguage()
@@ -13,7 +14,7 @@ export function InstructorAdminWorkspace() {
   const instructors = resource.data ?? []
   const action = useAsyncLock()
   const [email, setEmail] = useState('')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useNotice()
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -24,7 +25,7 @@ export function InstructorAdminWorkspace() {
       await resource.refresh()
       setMessage(t('Instructor approved.'))
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t('Could not approve instructor.'))
+      setMessage(error instanceof Error ? error.message : t('Could not approve instructor.'), 'error')
     } finally {
       action.finish()
     }
@@ -37,7 +38,7 @@ export function InstructorAdminWorkspace() {
       await resource.refresh()
       setMessage(t('Instructor access revoked.'))
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t('Could not revoke instructor.'))
+      setMessage(error instanceof Error ? error.message : t('Could not revoke instructor.'), 'error')
     } finally {
       action.finish()
     }
@@ -62,6 +63,6 @@ export function InstructorAdminWorkspace() {
         {instructor.source === 'database' && <Button type="button" variant="outline" disabled={action.busy || resource.loading} aria-label={`${t('Revoke')} ${instructor.email}`} onClick={() => void revoke(instructor.email)}>{t('Revoke')}</Button>}
       </li>)}
     </ul>
-    {message && <p role="status" className="instructor-admin-status">{message}</p>}
+    <ToastNotice notice={message} />
   </section>
 }
