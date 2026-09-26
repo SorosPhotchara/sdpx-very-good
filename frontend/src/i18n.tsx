@@ -15,7 +15,7 @@ const th: Record<string, string> = {
   'Instructor is already approved': 'อาจารย์ได้รับอนุมัติแล้ว',
   'Classrooms': 'ห้องเรียน', 'Assignments': 'งานประเมิน', 'No assignments yet.': 'ยังไม่มีงานประเมิน',
   'Create assignment': 'สร้างงานประเมิน', 'Save assignment': 'บันทึกงานประเมิน', 'Cancel edit': 'ยกเลิกการแก้ไข',
-  'Preview pairs': 'ดูตัวอย่างคู่', 'Edit': 'แก้ไข', 'Publish': 'เผยแพร่', 'Published': 'เผยแพร่แล้ว',
+  'Preview pairs': 'ดูตัวอย่างคู่', 'Hide preview': 'ปิดตัวอย่างคู่', 'Edit': 'แก้ไข', 'Publish': 'เผยแพร่', 'Published': 'เผยแพร่แล้ว',
   'Title': 'ชื่องาน', 'Group evaluation': 'ประเมินกลุ่ม', 'Individual evaluation': 'ประเมินรายบุคคล',
   'Work score maximum': 'คะแนนผลงานเต็ม', 'Participation maximum': 'คะแนนการมีส่วนร่วมเต็ม',
   'Deadline': 'กำหนดส่ง', 'Criterion': 'เกณฑ์', 'Weight %': 'น้ำหนัก %', 'Remove': 'นำออก',

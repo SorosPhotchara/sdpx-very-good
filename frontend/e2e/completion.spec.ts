@@ -33,6 +33,14 @@ test('complete publication, submission, scores and exports with real API', async
   await expect(page.getByText('Assignment created.', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Preview pairs', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Pair assignment preview' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Hide preview', exact: true })).toHaveAttribute('aria-expanded', 'true')
+  await page.getByRole('button', { name: 'Hide preview', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Pair assignment preview' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Preview pairs', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  await page.getByRole('button', { name: 'Preview pairs', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Pair assignment preview' })).toBeVisible()
+  await page.getByRole('button', { name: 'Hide preview', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Pair assignment preview' })).toHaveCount(0)
   let publishRequests = 0
   let assignmentApi = ''
   let failRefresh = false

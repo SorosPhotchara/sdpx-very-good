@@ -177,6 +177,12 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
   }
 
   async function handlePairs(assignmentId: number, shouldPublish: boolean) {
+    if (busy) return
+    if (!shouldPublish && pairPreviews[assignmentId]) {
+      setPairPreviews((current) => { const next = { ...current }; delete next[assignmentId]; return next })
+      setStatus('')
+      return
+    }
     if (!action.begin()) return
     setPairAction({ id: assignmentId, publish: shouldPublish })
     try {
@@ -212,13 +218,13 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
       <span>{assignment.title}</span>
       {isInstructor && <span className="ml-3 inline-flex gap-2">
         {!assignment.published_at && <>
-          <button type="button" disabled={busy || resource.loading} aria-busy={pairAction?.id === assignment.id && !pairAction.publish} className="text-blue-700" onClick={() => void handlePairs(assignment.id, false)}>{pairAction?.id === assignment.id && !pairAction.publish ? (language === 'th' ? 'กำลังสร้างตัวอย่าง...' : 'Preparing preview...') : t('Preview pairs')}</button>
+          <button type="button" disabled={busy || resource.loading} aria-expanded={Boolean(pairPreviews[assignment.id])} aria-controls={`pair-preview-${assignment.id}`} aria-busy={pairAction?.id === assignment.id && !pairAction.publish} className="text-blue-700" onClick={() => void handlePairs(assignment.id, false)}>{pairAction?.id === assignment.id && !pairAction.publish ? (language === 'th' ? 'กำลังสร้างตัวอย่าง...' : 'Preparing preview...') : t(pairPreviews[assignment.id] ? 'Hide preview' : 'Preview pairs')}</button>
           <button type="button" disabled={busy || resource.loading} className="text-blue-700" onClick={() => void beginEdit(assignment.id)}>{t('Edit')}</button>
           <button type="button" disabled={busy || resource.loading} aria-busy={pairAction?.id === assignment.id && pairAction.publish} className="publish-action" onClick={() => void handlePairs(assignment.id, true)}>{pairAction?.id === assignment.id && pairAction.publish ? (language === 'th' ? 'กำลังเผยแพร่...' : 'Publishing...') : t('Publish')}</button>
         </>}
         {assignment.published_at && <span className="text-green-700">{t('Published')}</span>}
       </span>}
-      {isInstructor && pairPreviews[assignment.id] && <PairPreviewPanel preview={pairPreviews[assignment.id]} />}
+      {isInstructor && pairPreviews[assignment.id] && <div id={`pair-preview-${assignment.id}`}><PairPreviewPanel preview={pairPreviews[assignment.id]} /></div>}
       {!isInstructor && <>
         <EvaluationWorkspace assignmentId={assignment.id} section="group" />
         <EvaluationWorkspace assignmentId={assignment.id} section="individual" />
