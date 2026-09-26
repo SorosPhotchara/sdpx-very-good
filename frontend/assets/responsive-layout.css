@@ -15,8 +15,9 @@ body{min-width:280px}
 .sidebar .classroom-create-toggle:hover{background:#bfe0d0;color:#16323a}
 .create-classroom{display:none;grid-column:1/-1;padding:14px;margin:0;border:1px solid #49626a;border-radius:10px;background:#1f3e46}
 .create-classroom.is-open{display:block}
-.create-classroom>div{border-radius:8px;margin-top:8px}
-.create-classroom input{font-size:16px}
+.create-classroom>div{height:50px;align-items:stretch;border-radius:8px;margin-top:8px}
+.create-classroom input{height:48px;min-height:48px;padding:0 12px;border-radius:0;font-size:16px;line-height:1.5;box-shadow:none}
+.create-classroom button{height:48px;min-height:48px;min-width:88px;margin:0;padding:0 12px;border-radius:0;font-size:14px;line-height:1.5;box-shadow:none}
 .content-shell{min-height:70svh}
 .topbar{height:auto;min-height:64px;padding:8px max(16px,env(safe-area-inset-left));gap:12px;background:#fff}
 .topbar-crumb{font-size:12px;text-transform:none;letter-spacing:0}
