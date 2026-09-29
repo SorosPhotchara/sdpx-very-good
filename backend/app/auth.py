@@ -3,17 +3,23 @@
 import os
 from dataclasses import dataclass
 
+import requests as http_requests
+from cachecontrol import CacheControl
+from cachecontrol.cache import DictCache
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from google.auth.exceptions import GoogleAuthError
-from google.auth.transport import requests
+from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from . import models
 from .database import get_db
 
 bearer = HTTPBearer(auto_error=False)
+# Cache Google's public certificates across requests in a warm process. The
+# certificate endpoint's Cache-Control header determines when to refresh them.
+certificate_cache = DictCache()
 
 
 @dataclass(frozen=True)
@@ -83,9 +89,12 @@ def current_identity(
         raise HTTPException(status_code=503, detail="Google sign-in is not configured")
 
     try:
-        claims = id_token.verify_oauth2_token(
-            credentials.credentials, requests.Request(), client_id
-        )
+        # A fresh Session avoids sharing mutable requests state across worker
+        # threads, while DictCache shares only Google's public certificates.
+        with CacheControl(http_requests.Session(), cache=certificate_cache) as session:
+            claims = id_token.verify_oauth2_token(
+                credentials.credentials, google_requests.Request(session=session), client_id
+            )
     except ValueError as error:
         raise HTTPException(status_code=401, detail="Invalid Google token") from error
     except GoogleAuthError as error:

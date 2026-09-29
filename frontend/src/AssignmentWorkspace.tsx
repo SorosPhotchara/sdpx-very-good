@@ -222,7 +222,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
         ? language === 'th' ? 'เปิด “สร้างงาน” ด้านล่างเพื่อกำหนดเกณฑ์และวันครบกำหนด จากนั้นดูตัวอย่างคู่ก่อนเผยแพร่ให้นักศึกษา' : 'Open “Create assignment” below to set criteria and deadlines, then preview the pairs before publishing to students.'
         : language === 'th' ? 'งานประเมินจะแสดงที่นี่เมื่ออาจารย์เพิ่มงาน หากยังไม่พบงาน ให้สอบถามอาจารย์ประจำห้องเรียน' : 'Evaluations will appear here when your instructor adds an assignment. If you are expecting one, ask your classroom instructor.'}</p>
     </div>}
-    {assignments.map((assignment) => <div key={assignment.id} className="assignment-card border rounded-xl p-3 text-sm">
+    {assignments.map((assignment, index) => <div key={assignment.id} className="assignment-card border rounded-xl p-3 text-sm">
       <span>{assignment.title}</span>
       {isInstructor && <span className="ml-3 inline-flex gap-2">
         {!assignment.published_at && <>
@@ -234,7 +234,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
       </span>}
       {isInstructor && pairPreviews[assignment.id] && <div id={`pair-preview-${assignment.id}`}><PairPreviewPanel preview={pairPreviews[assignment.id]} /></div>}
       {!isInstructor && <>
-        <EvaluationWorkspace assignmentId={assignment.id} section="group" />
+        <EvaluationWorkspace assignmentId={assignment.id} section="group" initiallyOpen={index === 0} />
         <EvaluationWorkspace assignmentId={assignment.id} section="individual" />
       </>}
       <ScoreWorkspace assignmentId={assignment.id} isInstructor={isInstructor} />
