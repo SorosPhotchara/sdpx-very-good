@@ -1,6 +1,6 @@
 # PairEval domain model
 
-The first local release uses one verified Google email as a person's identity. Instructor eligibility comes from `INSTRUCTOR_EMAILS`. A Classroom stores its assigned instructor emails; a Student row is a classroom membership keyed by `(classroom_id, email)`. The same person may have Student rows in several classrooms. CSV import creates pending memberships; `GET /me` records `activated_at` for all matching memberships on first verified sign-in.
+The system uses one verified Google email as a person's identity. Platform administrators are bootstrapped through `ADMIN_EMAILS`. Instructor eligibility comes from `INSTRUCTOR_EMAILS` or an administrator-approved InstructorApproval record in PostgreSQL. A Classroom stores its assigned instructor emails; a Student row is a classroom membership keyed by `(classroom_id, email)`. The same person may have Student rows in several classrooms. CSV import creates pending memberships; `GET /me` records `activated_at` for all matching memberships on first verified sign-in.
 
 ## Evaluation lifecycle
 
@@ -24,4 +24,4 @@ Participation is a separate component for each student and section: `participati
 
 ## Ownership
 
-Classroom instructor emails are approved by the administrator through the environment allowlist before invitation. Any assigned instructor may manage that Classroom, and the last assigned instructor cannot be removed. No instructor or student API may read another Classroom's roster, pairs, evaluations, or report without matching membership or instructor assignment.
+An administrator approves an instructor globally in the database or through the bootstrap environment allowlist. A classroom instructor may invite only approved instructors to that Classroom. Any assigned instructor may manage that Classroom, and the last assigned instructor cannot be removed. Revoking database approval immediately removes instructor privileges from that account across the application. No instructor or student API may read another Classroom's roster, pairs, evaluations, or report without matching membership or instructor assignment.

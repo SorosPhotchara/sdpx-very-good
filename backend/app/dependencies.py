@@ -1,20 +1,11 @@
 """Shared API dependencies and access checks."""
 
-from collections.abc import Iterator
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from . import models
 from .auth import Identity
-from .database import SessionLocal
+from .database import get_db
 from .timezone import as_utc
-
-def get_db() -> Iterator[Session]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 
 def require_owner(classroom_id: int, identity: Identity, db: Session) -> models.Classroom:
     classroom = db.get(models.Classroom, classroom_id)

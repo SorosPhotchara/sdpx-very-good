@@ -2,10 +2,12 @@
 
 ระบบประเมินผลงานนักศึกษาแบบเปรียบเทียบคู่ รองรับการจัดห้องเรียน งานประเมิน คะแนน รายงาน และการใช้งานทั้งภาษาไทยและอังกฤษ
 
+คู่มือสำหรับอาจารย์และนักศึกษา: [USER_GUIDE.md](USER_GUIDE.md)
+
 ## สิ่งที่ต้องติดตั้ง
 
 - Git
-- Python 3.12
+- Python 3.12 ขึ้นไป
 - Node.js และ npm
 - Docker Desktop
 
@@ -25,6 +27,8 @@ Copy-Item frontend\.env.example frontend\.env
 
 ### 2. เลือกวิธีเข้าสู่ระบบ
 
+`AUTH_MODE` ใน `backend/.env` กับ `VITE_AUTH_MODE` ใน `frontend/.env` ต้องตรงกันเสมอ ถ้าตั้งคนละโหมด Frontend จะส่ง token คนละชนิดกับที่ Backend ตรวจ และการเข้าสู่ระบบจะล้มเหลวด้วย 401
+
 #### โหมดทดลอง
 
 ค่าเริ่มต้นจาก `.env.example` ใช้งานโหมดทดลองได้ทันที
@@ -35,6 +39,7 @@ Copy-Item frontend\.env.example frontend\.env
 APP_ENV=development
 AUTH_MODE=mock
 INSTRUCTOR_EMAILS=teacher@example.edu
+ADMIN_EMAILS=teacher@example.edu
 ```
 
 `frontend/.env`:
@@ -58,7 +63,8 @@ http://localhost:5173
 
 ```env
 GOOGLE_CLIENT_ID=<google-web-client-id>
-INSTRUCTOR_EMAILS=teacher1@gmail.com,teacher2@gmail.com
+ADMIN_EMAILS=admin@gmail.com
+INSTRUCTOR_EMAILS=teacher1@gmail.com
 AUTH_MODE=google
 ```
 
@@ -69,7 +75,7 @@ VITE_GOOGLE_CLIENT_ID=<google-web-client-id>
 VITE_AUTH_MODE=google
 ```
 
-ถ้า OAuth App อยู่ในสถานะ Testing ต้องเพิ่มบัญชีที่ใช้เข้าสู่ระบบในรายการ Test users ของ Google Cloud ด้วย อาจารย์ต้องเข้าสู่ระบบด้วยอีเมลที่อยู่ใน `INSTRUCTOR_EMAILS` ส่วนนักศึกษาต้องใช้อีเมลที่ตรงกับ roster CSV
+ถ้า OAuth App อยู่ในสถานะ Testing ต้องเพิ่มบัญชีที่ใช้เข้าสู่ระบบในรายการ Test users ของ Google Cloud ด้วย ผู้ดูแลระบบเริ่มต้นต้องใช้อีเมลใน `ADMIN_EMAILS` ส่วน `INSTRUCTOR_EMAILS` ใช้กำหนดอาจารย์เริ่มต้น นักศึกษาต้องใช้อีเมลที่ตรงกับ roster CSV
 
 ระบบไม่มีหน้าสมัครสมาชิกแยก Google จะยืนยันตัวตนและ Backend จะกำหนดสิทธิ์จากอีเมล
 
@@ -119,13 +125,15 @@ npm.cmd run dev -- --host localhost --port 5173
 
 ## การใช้งานสำหรับอาจารย์
 
-1. เข้าสู่ระบบด้วยอีเมลที่อยู่ใน `INSTRUCTOR_EMAILS`
+1. เข้าสู่ระบบด้วยอีเมลที่อยู่ใน `INSTRUCTOR_EMAILS` หรือได้รับอนุมัติจากผู้ดูแลระบบ
 2. สร้าง Classroom จากแถบด้านซ้าย
 3. เปิด **จัดการห้องเรียน** และนำเข้า roster CSV
    หรือกรอก **อีเมล Google ของนักศึกษา** กับ **ชื่อกลุ่ม** เพื่อเพิ่มทีละคนก่อนเผยแพร่ Assignment
 4. สร้าง Assignment กำหนดคะแนน Deadline และเกณฑ์ประเมิน
 5. ตรวจคู่ประเมินแล้ว Publish
 6. ติดตามผลประเมิน ดูคะแนน และดาวน์โหลดรายงาน
+
+ผู้ดูแลระบบที่อยู่ใน `ADMIN_EMAILS` สามารถอนุมัติหรือถอนสิทธิ์อาจารย์ได้จากหน้า **จัดการสิทธิ์อาจารย์** โดยรายชื่อที่เพิ่มผ่านหน้านี้จะเก็บใน PostgreSQL และใช้เชิญเข้าห้องเรียนได้ทันที ไม่ต้องแก้ environment หรือ deploy ใหม่
 
 รูปแบบ roster CSV:
 
@@ -174,5 +182,24 @@ npm.cmd run test:e2e
 npm.cmd run lint
 npm.cmd run build
 ```
+
+### Docker tests on a fresh machine
+
+Install Node.js and Docker Desktop, start Docker, and clone this repository. No image exported from another developer's machine is needed. Compose downloads the PostgreSQL/Python/Playwright base images and builds the test images from the Dockerfiles; later runs reuse cached layers.
+
+From the repository root, run these commands one at a time:
+
+```powershell
+npm.cmd --prefix backend run test:container
+npm.cmd --prefix frontend run test:e2e
+```
+
+These container tests use a temporary PostgreSQL database and mock Google identities. They do not need Neon credentials or a Google OAuth client. The runner removes the test containers and temporary data afterward.
+
+### Frontend UI components
+
+The frontend uses shadcn/ui Button, Input, Label, Alert and Alert Dialog components in `frontend/src/components/ui/`. The teal theme is defined in `frontend/src/index.css` and connected through `frontend/tailwind.config.cjs`; `frontend/components.json` configures the CLI and `@/` imports. Group reassignment uses an accessible modal confirmation; submission keeps its confirmation beside the evaluation.
+
+This application uses React 18 and Tailwind CSS 3. Add compatible components from `frontend/` with `npx.cmd shadcn@2.3.0 add <component>`. Components are source files owned by this repository; adapt their styles to the existing theme rather than replacing global typography or layout.
 
 คำสั่ง E2E ใช้ `compose.test.yml` เพื่อ build และรัน Playwright, Chromium, Backend และ Frontend ภายใน service `e2e` พร้อมฐานข้อมูล `test-db` แบบชั่วคราว ข้อมูลทดสอบอยู่ใน schema `paireval_e2e` ซึ่งถูกสร้างใหม่ทุกครั้ง และ container ทดสอบจะถูกลบเมื่อจบ

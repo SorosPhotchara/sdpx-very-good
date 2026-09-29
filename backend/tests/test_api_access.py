@@ -55,6 +55,15 @@ class ApiAccessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["instructor_emails"], "teacher@example.edu")
 
+    def test_service_prefix_preserves_authentication_and_routes(self) -> None:
+        with patch.object(app, "root_path", "/api"):
+            self.assertEqual(self.client.get("/api/health").status_code, 200)
+            self.assertEqual(self.client.get("/api/me").status_code, 401)
+            self.sign_in("teacher@example.edu", is_instructor=True)
+            response = self.client.post("/api/classrooms/", json={"name": "Vercel staging"})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(self.client.get("/api/classrooms/").json()[0]["name"], "Vercel staging")
+
     def test_student_sees_only_their_classroom(self) -> None:
         self.sign_in("teacher@example.edu", is_instructor=True)
         classroom_id = self.client.post("/classrooms/", json={"name": "Course"}).json()["id"]

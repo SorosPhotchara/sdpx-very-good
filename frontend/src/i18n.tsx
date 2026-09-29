@@ -3,9 +3,19 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 export type Language = 'th' | 'en'
 
 const th: Record<string, string> = {
+  'Working...': 'กำลังดำเนินการ...', 'Loading...': 'กำลังโหลด...', 'Retry': 'ลองอีกครั้ง', 'Signing in...': 'กำลังเข้าสู่ระบบ...',
+  'Administrator': 'ผู้ดูแลระบบ', 'Manage approved instructors': 'จัดการสิทธิ์อาจารย์',
+  'Approved instructors can be invited into classrooms by a classroom instructor.': 'อาจารย์ที่อนุมัติแล้วสามารถถูกเชิญเข้าห้องเรียนโดยอาจารย์ประจำห้อง',
+  'Instructor Google email': 'อีเมล Google ของอาจารย์', 'Approve instructor': 'อนุมัติอาจารย์',
+  'Instructor approved.': 'อนุมัติอาจารย์แล้ว', 'Instructor access revoked.': 'ถอนสิทธิ์อาจารย์แล้ว',
+  'Could not load instructors.': 'โหลดรายชื่ออาจารย์ไม่สำเร็จ', 'Could not approve instructor.': 'อนุมัติอาจารย์ไม่สำเร็จ',
+  'Could not revoke instructor.': 'ถอนสิทธิ์อาจารย์ไม่สำเร็จ', 'Configured by administrator': 'กำหนดผ่าน environment',
+  'Approved by': 'อนุมัติโดย', 'Revoke': 'ถอนสิทธิ์',
+  'Ask an administrator to approve this instructor first': 'กรุณาให้ผู้ดูแลระบบอนุมัติอาจารย์รายนี้ก่อน',
+  'Instructor is already approved': 'อาจารย์ได้รับอนุมัติแล้ว',
   'Classrooms': 'ห้องเรียน', 'Assignments': 'งานประเมิน', 'No assignments yet.': 'ยังไม่มีงานประเมิน',
   'Create assignment': 'สร้างงานประเมิน', 'Save assignment': 'บันทึกงานประเมิน', 'Cancel edit': 'ยกเลิกการแก้ไข',
-  'Preview pairs': 'ดูตัวอย่างคู่', 'Edit': 'แก้ไข', 'Publish': 'เผยแพร่', 'Published': 'เผยแพร่แล้ว',
+  'Preview pairs': 'ดูตัวอย่างคู่', 'Hide preview': 'ปิดตัวอย่างคู่', 'Edit': 'แก้ไข', 'Publish': 'เผยแพร่', 'Published': 'เผยแพร่แล้ว',
   'Title': 'ชื่องาน', 'Group evaluation': 'ประเมินกลุ่ม', 'Individual evaluation': 'ประเมินรายบุคคล',
   'Work score maximum': 'คะแนนผลงานเต็ม', 'Participation maximum': 'คะแนนการมีส่วนร่วมเต็ม',
   'Deadline': 'กำหนดส่ง', 'Criterion': 'เกณฑ์', 'Weight %': 'น้ำหนัก %', 'Remove': 'นำออก',

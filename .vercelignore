@@ -1,0 +1,16 @@
+**/.env
+**/.env.*
+**/.venv/**
+**/node_modules/**
+**/test-results/**
+**/__pycache__/**
+**/.pytest_cache/**
+.git/**
+.agents/**
+.codex/**
+memory-bank/**
+**/*.csv
+**/*.xlsx
+frontend/e2e/**
+frontend/tests/**
+backend/tests/**

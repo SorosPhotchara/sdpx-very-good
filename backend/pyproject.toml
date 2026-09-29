@@ -2,7 +2,8 @@
 name = "pairwise-evaluation-backend"
 version = "0.1.0"
 description = "PairEval classroom pairwise evaluation API"
-authors = ["PairEval Team <team@example.com>"]
+requires-python = ">=3.12"
+authors = [{name = "PairEval Team", email = "team@example.com"}]
 dependencies = [
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.23.0",
@@ -10,6 +11,7 @@ dependencies = [
     "alembic>=1.20.0",
     "psycopg[binary]>=3.2.0",
     "google-auth[requests]>=2.0.0,<3.0.0",
+    "cachecontrol>=0.14.4,<1.0.0",
     "pydantic[email]>=2.0.0",
     "python-multipart>=0.0.6",
     "python-dotenv>=1.0.0,<2.0.0"
@@ -21,6 +23,11 @@ dependencies = [
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+# `migrations` sits beside `app` at the project root, so flat-layout autodiscovery
+# refuses to build. Name the runtime package explicitly.
+[tool.setuptools]
+packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

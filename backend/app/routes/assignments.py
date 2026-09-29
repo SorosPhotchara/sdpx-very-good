@@ -100,13 +100,30 @@ def preview_assignment(
     assignment_id: int,
     identity: Identity = Depends(current_identity),
     db: Session = Depends(get_db),
-) -> dict[str, int]:
+) -> dict[str, int | list[dict[str, str]]]:
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
     require_owner(assignment.classroom_id, identity, db)
     try:
-        return {"pair_assignments": len(build_plan(db, assignment_id))}
+        plan = build_plan(db, assignment_id)
+        criteria = {item.id: item for item in db.query(models.Criteria).filter_by(assignment_id=assignment_id)}
+        groups = {item.id: item.name for item in db.query(models.Group).filter_by(classroom_id=assignment.classroom_id)}
+        students = {item.id: item for item in db.query(models.Student).filter_by(classroom_id=assignment.classroom_id)}
+        pairs = []
+        for item in plan:
+            allocation = item.allocation
+            is_group = allocation.kind == "group"
+            left_id = allocation.left_id
+            right_id = allocation.right_id
+            pairs.append({
+                "section": allocation.kind,
+                "criterion": criteria[item.criterion_id].name,
+                "left": groups[left_id] if is_group else (students[left_id].display_name or students[left_id].email),
+                "right": groups[right_id] if is_group else (students[right_id].display_name or students[right_id].email),
+                "evaluator": students[allocation.evaluator_id].email,
+            })
+        return {"pair_assignments": len(pairs), "pairs": pairs}
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 

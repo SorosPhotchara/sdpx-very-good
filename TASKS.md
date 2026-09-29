@@ -12,12 +12,12 @@ Implementation tracker based on [the PRD](project-idea/pairwise_evaluation_prd.m
 - Use pairwise instructor evaluation in the first release; direct numeric grading is outside that release.
 - Allow group reassignment only before the deadline.
 - Permit classroom creation only for instructor accounts approved in advance by an administrator.
-- Host FastAPI separately from the Vercel frontend. The API host is not chosen yet.
+- Host the frontend and FastAPI API together using Vercel Services, with Neon PostgreSQL through the Vercel Marketplace (confirmed by the owner).
 - A student can belong to multiple classrooms. Email uniqueness is per classroom, and the verified Google email activates all matching pending memberships on first login.
 - Use five response levels with an equal/tie choice. Left/right points are `1/0`, `.75/.25`, `.5/.5`, `.25/.75`, and `0/1`.
 - Cover every eligible pair at least five times before optimizing evaluator load balance. Do not offer individual evaluation to groups with fewer than three members.
 - Preserve the four prototype classrooms in PostgreSQL; the old database file is no longer part of the application.
-- Choose the API and PostgreSQL hosting provider later; focus on a local runnable system now.
+- Use Vercel for deployment; account login, Neon provisioning and the staging Google OAuth origin remain external setup.
 - Set separate Group and Individual deadlines and participation score maxima per assignment. Students in groups with fewer than three members are exempt from an individual participation penalty.
 - Treat participation as a separate score component. A new submission replaces the prior submission snapshot for that page; submitting collects the latest saved draft answers for that page.
 - Show an interim item without votes as "no data"; only the final calculation may show zero for an unscored item.
@@ -33,7 +33,7 @@ Implementation tracker based on [the PRD](project-idea/pairwise_evaluation_prd.m
 - [x] D6 — The first release uses pairwise instructor evaluation only.
 - [x] D7 — Group reassignment is allowed only before the deadline.
 - [x] D8 — Administrator-approved instructor accounts can create classrooms; pending CSV students activate on first login.
-- [x] D9 — FastAPI runs separately from Vercel; choose a provider after local workflows work.
+- [x] D9 — Vercel Services hosts frontend and API; Neon provides persistent PostgreSQL through the marketplace. Deployment configuration is prepared.
 
 ## 1. Establish a reliable development baseline
 
@@ -51,8 +51,9 @@ Implementation tracker based on [the PRD](project-idea/pairwise_evaluation_prd.m
 
 ## 3. Instructor setup flow
 
-- [ ] Implement Google login, session handling, role checks, and classroom isolation. Google ID token verification, approved-instructor allowlist, role isolation, sign-out, and expiry re-sign-in are implemented; automatic renewal and live Google configuration remain.
+- [ ] Implement Google login, session handling, role checks, and classroom isolation. Token verification, role isolation, expiry, renewal prompts, account continuity and sign-out cancellation are implemented. Google SDK lifecycle is browser-tested; live Google authentication on the deployed origin remains unverified.
 - [x] Create and list classrooms; invite and remove allowlisted instructors with access checks and last-instructor protection.
+- [x] Allow assigned instructors to rename a classroom and permanently delete it with typed-name confirmation. Delete the classroom's roster, groups, assignments, evaluations and history atomically; preserve other classrooms; verify permissions, cancellation and failures in API/browser tests.
 - [x] Import students from CSV (`email`, `groupname`), report row errors, avoid duplicates, create groups, and activate pending memberships on first verified login.
 - [x] Create and edit unpublished assignments with separate group and individual criteria, weights totaling 100% per section, score maxima, deadlines, and instructor vote weight.
 - [x] Show a pair allocation preview, publish an assignment, and persist the resulting pair assignments atomically. Backend and frontend controls are implemented.
@@ -64,6 +65,7 @@ Implementation tracker based on [the PRD](project-idea/pairwise_evaluation_prd.m
 - [x] Enforce eligibility, no self-evaluation, deadline, and submission rules in the API as well as the UI.
 - [x] Preserve submission history and use only the latest eligible submission for scoring.
 - [x] Test atomic draft failures, repeated submissions, expired deadlines, and outsider/peer access.
+- [x] Let students choose continuously while autosave is pending. Serialize and batch the latest choices, preserve newer edits when responses arrive, retain failed choices for retry, and block submission until all changes are saved. Browser tests cover delayed writes, multiple pairs, repeated changes and recovery after failure.
 
 ## 5. Scoring, reports, and instructor follow-up
 
@@ -76,11 +78,14 @@ Implementation tracker based on [the PRD](project-idea/pairwise_evaluation_prd.m
 
 ## 6. Release verification
 
-- [ ] Cover the full instructor-to-student workflow with API, frontend, and end-to-end tests.
-- [ ] Verify authorization, peer anonymity, CSV/spreadsheet safety, score examples, and reassignment history. Backend tests cover all five areas; browser-level confirmation remains.
-- [ ] Check the PRD targets with a classroom of 200 students and 10 groups, including evaluation page load and pre-deadline traffic. The benchmark now runs against an isolated PostgreSQL schema; browser rendering and concurrent traffic remain to verify.
-- [ ] Deploy the frontend, API, and persistent database according to D1 and D9; verify health, migrations, login, evaluation, and report export in staging.
+- [x] Use Sonner 2.0.8 for toast rendering, SVG status icons, entrance/exit motion, timing and swipe dismissal. Apply distinct success/error/info surfaces, a 36 px close target and mobile safe-area gutters; verify the library markup, icons and drag-to-dismiss behavior in Chromium.
+- [x] Replace action feedback with accessible, dismissible toast notifications for assignment creation/editing/publication, student and instructor evaluations, classroom management, roster import, student/group changes, instructor approvals and export failures. Success notices expire after seven seconds, pause during hover/focus, and errors stay until dismissed. Verify repeated messages, keyboard dismissal, reduced motion and mobile viewport gutters.
+- [x] Implement and verify responsive design for phone, tablet and desktop layouts at 320, 390, 768, 1024 and 1440 px in Thai and English. The refined layout uses compact mobile room navigation with on-demand classroom creation, consistent card surfaces, fluid spacing and container-based assignment fields. Chromium E2E checks sign-in, instructor forms and classroom tools, student evaluation and scores without page-wide horizontal overflow; additional resize checks cover long classroom names and intermediate widths from 280 to 2560 px. Report tables scroll within keyboard-focusable regions; confirmation dialogs fit narrow and short landscape viewports and respect reduced motion. Screenshots reviewed at 390, 768 and 1440 px. Physical devices and other browser engines have not been tested.
+- [x] Cover the full instructor-to-student workflow with API, frontend, and end-to-end tests, including publication, partial submission, scores, exports, reassignment, loading, retries and duplicate-action guards.
+- [x] Verify authorization, peer anonymity, CSV/spreadsheet safety, score examples, and reassignment history. Backend tests cover all five areas; browser E2E confirms forbidden report/outsider access, pseudonymous CSV evaluator labels, unsafe roster rejection, escaped CSV exports, and the displayed reassignment history.
+- [ ] Check the PRD targets with 200 students and 10 groups. Local browser rendering and 20 concurrent evaluation reads pass the 2-second target. Production latency and the pre-deadline uptime target require staging/production measurements.
+- [ ] Deploy the frontend, API, and persistent database according to D1 and D9; verify health, migrations, login, evaluation, and report export in staging. The configured Neon database was upgraded through 20260925_instructor_approvals; database-backed API reads pass with CORS headers locally using a diagnostic identity. Cloud deployment and live Google login remain unverified.
 
 ## Current implementation snapshot
 
-The repository now has a bilingual React/Vite instructor/student workflow and a FastAPI backend with Google token verification, development-only mock sign-in, roster import, assignment publication, draft and submission snapshots, score calculation, reports, instructor votes, group reassignment, audit, notifications, and CSV/XLSX exports. Docker runs only PostgreSQL 17; frontend and backend run separately on the host. PostgreSQL migrations, demo seed, 37 backend tests using isolated schemas, five frontend API tests, TypeScript lint, production build, and HTTP smoke checks are verified. Remaining release work includes live Google configuration, browser end-to-end coverage, concurrent traffic checks, and staging deployment after the host is chosen.
+The bilingual React/Vite and FastAPI workflows include loading/error states, action locks, lazy panels, stale-response protection, Google renewal prompts, themed shadcn/ui controls and Sonner action toasts. Student choices remain responsive during autosave; queued writes preserve the latest answer and can be retried after failures. Verification: 43 backend tests, 6 frontend API tests, TypeScript lint and production build pass. The 25 Chromium E2E tests cover classroom rename/deletion, cancellation and failure recovery, continuous student choices and autosave retries, toast lifecycle, placement and swipe dismissal, full workflows, responsive layouts and mobile navigation, accessible confirmation dialogs, resource lifecycles, Google SDK cancellation and a 200-student classroom with 20 concurrent reads. Toast positioning uses the native Popover API in current browsers; Chromium is verified, other browser engines and older browsers remain untested. Vercel Services configuration and DEPLOYMENT.md are prepared. The configured Neon database has all migrations through 20260925_instructor_approvals; database-backed health/classroom reads pass locally. Successful cloud deployment and live Google authentication on the deployed origin remain unverified.

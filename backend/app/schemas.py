@@ -5,9 +5,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from .timezone import as_utc
 
-class ClassroomBase(BaseModel):
+class ClassroomName(BaseModel):
     name: str
-    instructor_emails: Optional[str] = ""
 
     @field_validator("name")
     @classmethod
@@ -17,11 +16,34 @@ class ClassroomBase(BaseModel):
             raise ValueError("Classroom name is required")
         return name
 
+class ClassroomBase(ClassroomName):
+    instructor_emails: Optional[str] = ""
+
+class ClassroomRename(ClassroomName):
+    pass
+
 class ClassroomCreate(ClassroomBase):
     pass
 
 class Classroom(ClassroomBase):
     id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InstructorApprovalCreate(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class InstructorApprovalRead(BaseModel):
+    email: str
+    source: str
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 class StudentBase(BaseModel):

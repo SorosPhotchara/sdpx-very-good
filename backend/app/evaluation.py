@@ -66,6 +66,7 @@ def read_page(db: Session, assignment_id: int, section: str, email: str) -> dict
     return {
         "assignment_id": assignment_id,
         "section": section,
+        "group_name": student.group.name if student.group else None,
         "deadline": deadline,
         "is_open": bool(pairs) and deadline is not None and datetime.now(UTC) < deadline,
         "submitted_at": as_utc(latest.submitted_at) if latest else None,

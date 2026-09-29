@@ -21,12 +21,12 @@ def build_plan(db: Session, assignment_id: int) -> list[PlannedPair]:
     if assignment is None:
         raise ValueError("Assignment not found")
 
-    groups = db.query(models.Group).filter_by(classroom_id=assignment.classroom_id).all()
-    active = {group.id: [student.id for student in group.students] for group in groups if group.students}
+    groups = db.query(models.Group).filter_by(classroom_id=assignment.classroom_id).order_by(models.Group.id).all()
+    active = {group.id: sorted(student.id for student in group.students) for group in groups if group.students}
     if len(active) < 3:
         raise ValueError("At least three non-empty groups are required")
 
-    criteria = db.query(models.Criteria).filter_by(assignment_id=assignment_id).all()
+    criteria = db.query(models.Criteria).filter_by(assignment_id=assignment_id).order_by(models.Criteria.id).all()
     if not criteria:
         raise ValueError("Assignment has no criteria")
     for is_group, maximum in (

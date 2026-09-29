@@ -5,6 +5,7 @@ import os
 os.environ["APP_ENV"] = "development"
 os.environ["AUTH_MODE"] = "mock"
 os.environ["INSTRUCTOR_EMAILS"] = "teacher@example.edu"
+os.environ["ADMIN_EMAILS"] = "teacher@example.edu"
 os.environ["FRONTEND_ORIGINS"] = "http://127.0.0.1:5173"
 base_url = os.environ.get("E2E_DATABASE_URL", "postgresql+psycopg://paireval@127.0.0.1:5433/paireval")
 

@@ -1,3 +1,4 @@
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from . import models, schemas
@@ -18,6 +19,34 @@ def create_classroom(db: Session, classroom: schemas.ClassroomCreate):
     db.commit()
     db.refresh(db_classroom)
     return db_classroom
+
+def delete_classroom(db: Session, classroom_id: int) -> None:
+    """Remove dependent records in FK order, within one transaction."""
+    students = select(models.Student.id).where(models.Student.classroom_id == classroom_id)
+    assignments = select(models.Assignment.id).where(models.Assignment.classroom_id == classroom_id)
+    pairs = select(models.Pair.id).where(models.Pair.assignment_id.in_(assignments))
+    submissions = select(models.Submission.id).where(models.Submission.assignment_id.in_(assignments))
+    deletions = [
+        (models.Notification, models.Notification.student_id.in_(students)),
+        (models.Reassignment, models.Reassignment.classroom_id == classroom_id),
+        (models.SubmissionChoice, models.SubmissionChoice.submission_id.in_(submissions)),
+        (models.DraftChoice, models.DraftChoice.pair_id.in_(pairs)),
+        (models.InstructorVote, models.InstructorVote.pair_id.in_(pairs)),
+        (models.Submission, models.Submission.assignment_id.in_(assignments)),
+        (models.Pair, models.Pair.assignment_id.in_(assignments)),
+        (models.Criteria, models.Criteria.assignment_id.in_(assignments)),
+        (models.Assignment, models.Assignment.classroom_id == classroom_id),
+        (models.Student, models.Student.classroom_id == classroom_id),
+        (models.Group, models.Group.classroom_id == classroom_id),
+        (models.Classroom, models.Classroom.id == classroom_id),
+    ]
+    try:
+        for model, condition in deletions:
+            db.execute(delete(model).where(condition), execution_options={"synchronize_session": False})
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 # Student
 

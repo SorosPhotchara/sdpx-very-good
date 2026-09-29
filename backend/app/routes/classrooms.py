@@ -1,7 +1,7 @@
 """Classrooms endpoints."""
 
 from datetime import UTC, datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,7 +24,8 @@ def read_me(identity: Identity = Depends(current_identity), db: Session = Depend
         for member in activated:
             member.activated_at = now
         db.commit()
-    return {"email": identity.email, "is_instructor": identity.is_instructor,
+    return {"email": identity.email, "is_instructor": identity.is_instructor, "is_admin": identity.is_admin,
+            "picture_url": identity.picture_url,
             "classroom_ids": [member.classroom_id for member in memberships]}
 
 
@@ -55,6 +56,34 @@ def read_classrooms(
     return visible[skip:skip + limit]
 
 
+@router.patch("/classrooms/{classroom_id}", response_model=schemas.Classroom)
+def rename_classroom(
+    classroom_id: int, payload: schemas.ClassroomRename,
+    identity: Identity = Depends(current_identity), db: Session = Depends(get_db),
+) -> models.Classroom:
+    classroom = require_owner(classroom_id, identity, db)
+    db.refresh(classroom, with_for_update=True)
+    require_owner(classroom_id, identity, db)
+    classroom.name = payload.name
+    db.commit()
+    db.refresh(classroom)
+    return classroom
+
+
+@router.delete("/classrooms/{classroom_id}", status_code=204)
+def delete_classroom(
+    classroom_id: int, payload: schemas.ClassroomRename,
+    identity: Identity = Depends(current_identity), db: Session = Depends(get_db),
+) -> Response:
+    classroom = require_owner(classroom_id, identity, db)
+    db.refresh(classroom, with_for_update=True)
+    require_owner(classroom_id, identity, db)
+    if payload.name != classroom.name:
+        raise HTTPException(409, "Classroom name changed or confirmation does not match. Refresh and try again.")
+    crud.delete_classroom(db, classroom_id)
+    return Response(status_code=204)
+
+
 @router.post("/classrooms/{classroom_id}/instructors", response_model=schemas.Classroom)
 def invite_instructor(
     classroom_id: int, payload: schemas.InstructorInvite,
@@ -62,8 +91,8 @@ def invite_instructor(
 ) -> models.Classroom:
     classroom = require_owner(classroom_id, identity, db)
     email = str(payload.email).strip().lower()
-    if email not in approved_instructors():
-        raise HTTPException(422, "Instructor email is not approved")
+    if email not in approved_instructors(db):
+        raise HTTPException(422, "Ask an administrator to approve this instructor first")
     emails = instructor_emails(classroom)
     emails.add(email)
     classroom.instructor_emails = ",".join(sorted(emails))
