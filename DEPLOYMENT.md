@@ -2,6 +2,8 @@
 
 Deploy from the repository root. `vercel.json` uses Vercel Services (currently beta) to host the Vite frontend and FastAPI API in one project. `/api/*` goes to FastAPI; the frontend uses this same-origin prefix in production.
 
+The API is pinned to Vercel's `sin1` region to stay near the configured Neon database in AWS `ap-southeast-1`. Verify the production Neon connection also uses `ap-southeast-1`; if it differs, set the Vercel Function region near that database instead.
+
 A service rewrite forwards the matched path unchanged, so FastAPI receives `/api/...` rather than `/...`. `API_ROOT_PATH` therefore mounts every router under that prefix; without it only `/api/health` resolves and every other endpoint returns 404. Leave `API_ROOT_PATH` unset locally, where the frontend calls the API on its own origin.
 
 ## Account and database

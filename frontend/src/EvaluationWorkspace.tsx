@@ -10,10 +10,10 @@ import { ToastNotice, useNotice } from './components/ui/toast'
 
 const choices = ['Strongly left', 'Slightly left', 'Equal', 'Slightly right', 'Strongly right']
 
-export function EvaluationWorkspace({ assignmentId, section }: { assignmentId: number; section: 'group' | 'individual' }) {
+export function EvaluationWorkspace({ assignmentId, section, initiallyOpen = true }: { assignmentId: number; section: 'group' | 'individual'; initiallyOpen?: boolean }) {
   const { t, language, date } = useLanguage()
-  const [opened, setOpened] = useState(section === 'group')
-  const [activated, setActivated] = useState(section === 'group')
+  const [opened, setOpened] = useState(section === 'group' && initiallyOpen)
+  const [activated, setActivated] = useState(section === 'group' && initiallyOpen)
   const resource = useResource<EvaluationPage>(`${assignmentId}:${section}`, () => getEvaluation(assignmentId, section), activated)
   const page = resource.data
   const setPage = resource.setData

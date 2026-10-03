@@ -12,7 +12,7 @@
 .app-toaster[data-sonner-toaster] { font-family: inherit; }
 .app-toaster [data-sonner-toast][data-styled=true] {
   pointer-events: auto;
-  padding: 18px 56px 18px 18px;
+  padding: 18px 64px 18px 18px;
   min-height: 76px;
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
@@ -34,18 +34,19 @@
 .app-toaster [data-sonner-toast][data-swiping=true] { user-select: none; }
 .app-toaster [data-sonner-toast] [data-icon] { width: 24px; height: 24px; margin: 0; }
 .app-toaster [data-sonner-toast] [data-icon] svg { width: 24px; height: 24px; margin: 0; }
-.app-toaster [data-sonner-toast] [data-close-button] {
+.app-toaster[data-sonner-toaster] [data-sonner-toast][data-styled=true] [data-close-button] {
   left: auto;
-  right: 10px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
   border: 0;
   border-radius: 8px;
   background: transparent;
   color: inherit;
 }
-.app-toaster [data-sonner-toast] [data-close-button]:hover { background: #173c360d; }
-.app-toaster [data-sonner-toast] [data-close-button]:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.app-toaster[data-sonner-toaster] [data-sonner-toast][data-styled=true] [data-close-button]:hover { background: #173c360d; }
+.app-toaster[data-sonner-toaster] [data-sonner-toast][data-styled=true] [data-close-button]:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .app-toaster [data-sonner-toast] [data-close-button] svg { width: 18px; height: 18px; }
