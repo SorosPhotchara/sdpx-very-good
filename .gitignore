@@ -33,6 +33,7 @@ coverage
 *.lcov
 frontend/test-results/
 frontend/playwright-report/
+backend/test-results/
 .vercel/
 **/.vercel/
 

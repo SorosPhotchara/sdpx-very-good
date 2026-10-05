@@ -29,7 +29,7 @@ FROM build AS test
 RUN pip install -r requirements-dev.txt --no-cache-dir
 
 # Run the backend pytest suite when the test target is started.
-CMD ["python", "-m", "pytest"]
+CMD ["python", "-m", "pytest", "--cov=app", "--cov-report=xml:coverage/coverage.xml", "--junitxml=test-results/backend-unit.xml"]
 
 # Start runtime from a clean pinned image without development dependencies.
 FROM python:3.12-slim AS runtime

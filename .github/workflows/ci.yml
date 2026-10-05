@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -37,9 +38,18 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
-      - name: Test frontend
+      - name: Build frontend
         working-directory: frontend
-        run: npm test
+        run: npm run build
+
+      - name: Frontend unit tests with JUnit
+        working-directory: frontend
+        run: |
+          mkdir -p test-results
+          node --test \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=junit --test-reporter-destination=test-results/frontend-unit.xml \
+            tests/*.test.mjs
 
       - name: Test backend with PostgreSQL
         run: docker compose -f compose.test.yml up --build --abort-on-container-exit --exit-code-from unit unit
@@ -47,6 +57,27 @@ jobs:
       - name: Clean up backend test containers
         if: always()
         run: docker compose -f compose.test.yml down --volumes
+
+      - name: Upload backend coverage and unit reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-results-${{ github.sha }}
+          path: |
+            frontend/test-results/frontend-unit.xml
+            backend/coverage/
+            backend/test-results/backend-unit.xml
+          if-no-files-found: warn
+
+      - name: Test summary in pull requests
+        if: always() && github.event_name == 'pull_request'
+        uses: dorny/test-reporter@v3
+        with:
+          name: Backend unit test results
+          path: backend/test-results/backend-unit.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
 
   e2e-tests:
     needs: lint-and-unit-test
@@ -60,6 +91,17 @@ jobs:
       - name: Clean up E2E containers
         if: always()
         run: docker compose -f compose.test.yml down --volumes
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/e2e.xml
+          if-no-files-found: warn
+          retention-days: 7
 
   deploy-staging:
     needs: [lint-and-unit-test, e2e-tests]
