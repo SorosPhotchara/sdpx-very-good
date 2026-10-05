@@ -2,14 +2,14 @@
 
 บันทึกนี้ใช้เวลาที่วัดได้จริงเท่านั้น ก่อนหน้านี้มี CI ขั้นต้นอยู่แล้ว จึงไม่มี baseline ของช่วง "ก่อนมี CI" ที่วัดย้อนหลังได้
 
-| ตัวชี้วัด | ก่อนปรับ pipeline | หลังปรับ pipeline |
-|---|---|---|
-| Frontend unit test (local) | 0.94 วินาที (6 tests, 5 ต.ค. 2569) | รอผล GitHub Actions |
-| Backend unit test (PostgreSQL) | 9.15 วินาที (47 tests, coverage 85.59%) | รอผล GitHub Actions |
-| E2E (Playwright) | 51.3 วินาที (27 tests) | รอผล GitHub Actions |
-| Pipeline ทั้งชุด | ไม่มีข้อมูลย้อนหลังที่เทียบได้ | รอ successful run |
-| Lead time จาก commit ถึง staging | ไม่มีข้อมูลย้อนหลังที่เทียบได้ | รอ deploy staging สำเร็จ |
-| Deployment frequency | ไม่มีข้อมูลย้อนหลังที่เทียบได้ | รอข้อมูล deployment อย่างน้อย 1 สัปดาห์ |
+| ตัวชี้วัด | ก่อนมี CI (ย้อนหลัง) | Local reference, 5 ต.ค. 2569 | CI หลังปรับ |
+|---|---|---|---|
+| Frontend unit test | ไม่มีข้อมูล | 0.94 วินาที (6 tests) | รอผล GitHub Actions |
+| Backend unit test (PostgreSQL) | ไม่มีข้อมูล | 9.15 วินาที (47 tests, coverage 85.59%) | รอผล GitHub Actions |
+| E2E (Playwright) | ไม่มีข้อมูล | 51.3 วินาที (27 tests) | รอผล GitHub Actions |
+| Pipeline ทั้งชุด | ไม่มีข้อมูล | ไม่ใช่ตัวชี้วัด local | รอ successful run |
+| Lead time จาก commit ถึง staging | ไม่มีข้อมูล | ไม่ใช่ตัวชี้วัด local | รอ deploy staging สำเร็จ |
+| Deployment frequency | ไม่มีข้อมูล | ไม่ใช่ตัวชี้วัด local | รอข้อมูล deployment อย่างน้อย 1 สัปดาห์ |
 
 ## วิธีวัด
 
