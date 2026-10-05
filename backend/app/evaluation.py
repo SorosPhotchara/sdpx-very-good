@@ -1,12 +1,14 @@
 """Student evaluation access, drafts, and immutable submissions."""
 
 from datetime import UTC, datetime
+from time import perf_counter
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from . import models
 from .timezone import as_utc
+from .observability import log_event
 
 
 def context(db: Session, assignment_id: int, section: str, email: str):
@@ -85,6 +87,7 @@ def read_page(db: Session, assignment_id: int, section: str, email: str) -> dict
 
 
 def save_draft(db: Session, assignment_id: int, section: str, email: str, changes: list[tuple[int, int | None]]) -> dict:
+    started = perf_counter()
     _, student, pairs, deadline = context(db, assignment_id, section, email)
     require_open(pairs, deadline)
     allowed = {pair.id for pair in pairs}
@@ -107,6 +110,8 @@ def save_draft(db: Session, assignment_id: int, section: str, email: str, change
     except Exception:
         db.rollback()
         raise
+    log_event("evaluation_draft_saved", assignment_id=assignment_id, section=section,
+              changed_count=len(changes), duration_ms=round((perf_counter() - started) * 1000, 2))
     return read_page(db, assignment_id, section, email)
 
 

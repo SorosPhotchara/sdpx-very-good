@@ -1,12 +1,15 @@
 """FastAPI application composition."""
 
 import os
-from fastapi import Depends, FastAPI, HTTPException
+import time
+from uuid import UUID, uuid4
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from .dependencies import get_db
+from .observability import log_event, request_id
 from .routes import admin, assignments, classrooms, evaluations, reports
 
 # Behind a platform rewrite such as Vercel's `/api/(.*)`, the upstream path still
@@ -27,6 +30,28 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.middleware("http")
+async def log_request(request: Request, call_next):
+    supplied = request.headers.get("x-request-id", "")
+    try:
+        correlation_id = str(UUID(supplied))
+    except ValueError:
+        correlation_id = str(uuid4())
+    token = request_id.set(correlation_id)
+    start = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers["x-request-id"] = correlation_id
+        return response
+    finally:
+        route = request.scope.get("route")
+        log_event("http_request", method=request.method, path=getattr(route, "path", "unmatched"),
+                  statusCode=status, duration_ms=round((time.perf_counter() - start) * 1000, 2))
+        request_id.reset(token)
 
 
 @app.get("/health")
