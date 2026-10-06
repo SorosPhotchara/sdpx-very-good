@@ -1,33 +1,45 @@
-# Performance Report — WS-07
+# รายงานผลทดสอบประสิทธิภาพ — WS-07
 
-## Setup and hypothesis
+## รันในเครื่องด้วย Docker Compose
 
-- Date: 5 October 2026; target: **local** FastAPI and PostgreSQL in Docker, with disposable demo data and development-only mock sign-in.
-- Load: 0→5 VUs over 30s, 5→10 over 60s, 10→0 over 30s; 1s think time between actions.
-- Journey: student identity → assignments → group evaluation page → save the same draft choice. The draft write is enabled only for this disposable local account.
-- Hypothesis made before the run: saving a draft will have higher p95 than reading the evaluation page because it commits a row and then reads the page again.
+รันคำสั่งจากโฟลเดอร์หลักของโปรเจกต์ โดย profile `performance` จะเริ่ม PostgreSQL สำหรับทดสอบ สร้างข้อมูลงานประเมินตัวอย่าง และให้ k6 ทดสอบ API ในเครื่อง ไม่ต้องใช้บัญชี Google หรือ URL ที่ deploy แล้ว
 
-## Results
+```powershell
+docker compose -f compose.test.yml --profile performance run --build --rm k6-smoke
+docker compose -f compose.test.yml --profile performance run --build --rm k6-load
+docker compose -f compose.test.yml --profile performance down --volumes
+```
 
-Full run: 672 requests (5.54/s), 0% failures, overall client p50 6.81 ms and p95 12.36 ms; all thresholds passed, exit code 0. The table uses the 672 matching structured HTTP log events, so these are server durations rather than k6 network durations.
+การทดสอบโหลดใช้บัญชีนักศึกษาจำลอง `student1@example.edu` และบันทึกคำตอบฉบับร่างในฐานข้อมูลทดสอบชั่วคราว หากต้องการใช้บัญชีทดสอบอื่น ให้กำหนด `K6_AUTH_TOKEN` ก่อนรันคำสั่ง คำสั่ง `run` จะคืน exit code ที่ไม่ใช่ 0 เมื่อผลทดสอบไม่ผ่านเกณฑ์ของ k6
 
-| Route | Count | Server p50 | Server p95 | Errors |
+## การตั้งค่าทดสอบและสมมติฐาน
+
+- วันที่: 5 ตุลาคม 2026; เป้าหมาย: FastAPI และ PostgreSQL **ในเครื่อง** ผ่าน Docker ใช้ข้อมูลตัวอย่างที่ลบทิ้งได้และการเข้าสู่ระบบจำลองสำหรับโหมดพัฒนาเท่านั้น
+- ปริมาณโหลด: เพิ่มจาก 0 เป็น 5 ผู้ใช้จำลอง (VUs) ใน 30 วินาที, 5 เป็น 10 ใน 60 วินาที แล้วลดจาก 10 เป็น 0 ใน 30 วินาที; เว้น 1 วินาทีระหว่างแต่ละขั้นตอน
+- ลำดับการใช้งาน: ตรวจข้อมูลนักศึกษา → ดูงานประเมิน → เปิดหน้าประเมินกลุ่ม → บันทึกตัวเลือกเดิมเป็นฉบับร่าง การเขียนข้อมูลนี้เปิดใช้เฉพาะบัญชีทดสอบในเครื่องที่ลบทิ้งได้
+- สมมติฐานก่อนทดสอบ: การบันทึกฉบับร่างจะมีค่า p95 สูงกว่าการอ่านหน้าประเมิน เพราะต้องบันทึกข้อมูลลงฐานข้อมูลแล้วอ่านข้อมูลหน้าเดิมอีกครั้ง
+
+## ผลทดสอบ
+
+ผลฐานอ้างอิงเดิมจากการทดสอบเต็มรอบมี 672 คำขอ (5.54 คำขอ/วินาที) ไม่พบคำขอล้มเหลว ค่า p50 ฝั่ง k6 เท่ากับ 6.81 ms และ p95 เท่ากับ 12.36 ms ผ่านทุกเกณฑ์ และจบด้วย exit code 0 ตารางด้านล่างใช้ข้อมูลจาก structured HTTP logs ของเซิร์ฟเวอร์ 672 รายการ จึงเป็นระยะเวลาประมวลผลฝั่งเซิร์ฟเวอร์ ไม่รวมเวลาเครือข่ายที่ k6 วัด
+
+| Endpoint | จำนวนคำขอ | p50 ฝั่งเซิร์ฟเวอร์ | p95 ฝั่งเซิร์ฟเวอร์ | ข้อผิดพลาด |
 |---|---:|---:|---:|---:|
 | `GET /me` | 168 | 2.73 ms | 3.41 ms | 0 |
 | `GET /assignments/` | 168 | 4.16 ms | 5.23 ms | 0 |
 | `GET /assignments/{assignment_id}/evaluation/{section}` | 168 | 7.07 ms | 8.68 ms | 0 |
 | `PUT /assignments/{assignment_id}/evaluation/{section}/draft` | 168 | 10.74 ms | 13.10 ms | 0 |
 
-The hypothesis was supported: draft p95 exceeded evaluation read p95 by 4.42 ms. k6 measured draft p95 14.00 ms and evaluation p95 9.43 ms. Nine of the ten slowest request log lines were draft writes; the slowest was 21.15 ms.
+ผลสนับสนุนสมมติฐาน: p95 ของการบันทึกฉบับร่างสูงกว่าการอ่านหน้าประเมิน 4.42 ms เมื่อวัดด้วย k6 ค่า p95 ของการบันทึกฉบับร่างเท่ากับ 14.00 ms และของการอ่านหน้าประเมินเท่ากับ 9.43 ms ในบันทึกคำขอที่ช้าที่สุด 10 รายการ มี 9 รายการเป็นการบันทึกฉบับร่าง; รายการที่ช้าที่สุดใช้เวลา 21.15 ms
 
-## AI analysis and next measurement
+## การวิเคราะห์ด้วย AI และสิ่งที่ควรวัดต่อ
 
-1. Most likely: `save_draft` commits changes and calls `read_page` afterward; both operations occur inside the slower route. Confirm with SQL statement counts and timings around commit and page read.
-2. Possible: `read_page` loads drafts, submission choices, criteria and labels with several queries. Confirm with per-query timings before optimizing.
-3. Possible: ten VUs share one student and draft pair, causing write contention. Confirm with separate test students and PostgreSQL lock wait metrics.
+1. เป็นไปได้มากที่สุด: `save_draft` บันทึกการเปลี่ยนแปลงลงฐานข้อมูล แล้วเรียก `read_page` ต่อภายใน endpoint เดียวกัน ควรตรวจจำนวนคำสั่ง SQL และเวลาของขั้นตอนบันทึกกับอ่านหน้าแยกกัน
+2. เป็นไปได้: `read_page` ใช้หลายคำสั่ง SQL เพื่อโหลดฉบับร่าง คำตอบที่ส่งแล้ว เกณฑ์ และชื่อที่แสดง ควรวัดเวลาแต่ละคำสั่งก่อนปรับประสิทธิภาพ
+3. เป็นไปได้: ผู้ใช้จำลอง 10 คนใช้บัญชีและคู่ประเมินเดียวกัน ทำให้การเขียนข้อมูลต้องรอกัน ควรทดสอบด้วยบัญชีแยกกันและตรวจเวลารอ lock ใน PostgreSQL
 
-The evidence supports investigating 1 first. A network bottleneck is not supported by the small client/server p95 gap here. A separate 5s probe with temporary `p(95)<1` failed at 7.98 ms and exited 1; the temporary script was removed. No performance optimization is made on this evidence alone.
+หลักฐานที่มีชี้ว่าควรตรวจข้อ 1 ก่อน ส่วนต่าง p95 ระหว่าง k6 กับเซิร์ฟเวอร์มีขนาดเล็ก จึงยังไม่มีหลักฐานว่าเครือข่ายเป็นคอขวด การทดลองแยก 5 วินาทีโดยตั้งเกณฑ์ชั่วคราว `p(95)<1` ไม่ผ่าน เพราะวัดได้ 7.98 ms และจบด้วย exit code 1; ลบสคริปต์ชั่วคราวแล้ว ยังไม่ปรับประสิทธิภาพจากข้อมูลชุดนี้เพียงอย่างเดียว
 
-## Staging and CI boundary
+## ขอบเขตการทดสอบบน staging และ CI
 
-No load test was sent to `sdpx-very-good.vercel.app`, which appears to be the production domain. The CI job requires a confirmed staging `STAGING_URL` variable and a `PERFORMANCE_BEARER_TOKEN` secret. Google ID tokens expire; a repeatable CI run needs a secure way to issue fresh test credentials.
+ไม่ได้ยิง load test ไปที่ `sdpx-very-good.vercel.app` เพราะดูเหมือนเป็นโดเมน production งาน CI ต้องมีตัวแปร `STAGING_URL` ที่ยืนยันว่าเป็น staging และ secret `PERFORMANCE_BEARER_TOKEN` เนื่องจาก Google ID token หมดอายุ การรัน CI ซ้ำอย่างต่อเนื่องจึงต้องมีวิธีออกข้อมูลยืนยันตัวตนสำหรับทดสอบที่ปลอดภัย

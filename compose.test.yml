@@ -43,3 +43,51 @@ services:
       test-db:
         condition: service_healthy
     ipc: host # Chromium shared memory
+
+  performance-api:
+    profiles: ["performance"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: test
+    environment:
+      DATABASE_URL: postgresql+psycopg://testuser:testpass@test-db:5432/testdb
+      API_ROOT_PATH: /api
+      APP_ENV: development
+      AUTH_MODE: mock
+      INSTRUCTOR_EMAILS: teacher@example.edu
+    command: sh -c "alembic upgrade head && python seed_demo.py && uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log"
+    depends_on:
+      test-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  k6-smoke:
+    profiles: ["performance"]
+    image: grafana/k6:1.8.1
+    volumes:
+      - ./performance:/scripts:ro
+    environment:
+      BASE_URL: http://performance-api:8000
+    command: run /scripts/smoke.js
+    depends_on:
+      performance-api:
+        condition: service_healthy
+
+  k6-load:
+    profiles: ["performance"]
+    image: grafana/k6:1.8.1
+    volumes:
+      - ./performance:/scripts:ro
+    environment:
+      BASE_URL: http://performance-api:8000
+      AUTH_TOKEN: ${K6_AUTH_TOKEN:-mock:student1@example.edu}
+      ENABLE_DRAFT_WRITE: "1"
+    command: run /scripts/load-test.js
+    depends_on:
+      performance-api:
+        condition: service_healthy
