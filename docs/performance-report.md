@@ -42,4 +42,4 @@ docker compose -f compose.test.yml --profile performance down --volumes
 
 ## ขอบเขตการทดสอบบน staging และ CI
 
-ไม่ได้ยิง load test ไปที่ `sdpx-very-good.vercel.app` เพราะดูเหมือนเป็นโดเมน production ปัจจุบันรัน k6 กับ API และ PostgreSQL ชั่วคราวในเครื่องผ่าน Docker Compose เท่านั้น จึงยังไม่มีผลทดสอบ staging และยังไม่ผ่านข้อกำหนด performance gate ใน CI ของ Lab 7 หากจะเพิ่ม gate นี้ภายหลัง ต้องมี staging URL ของทีมและวิธีออกข้อมูลยืนยันตัวตนของนักศึกษาทดสอบใหม่ได้ทุกครั้ง เพราะ Google ID token หมดอายุ
+ไม่ได้ยิง load test ไปที่ `sdpx-very-good.vercel.app` เพราะดูเหมือนเป็นโดเมน production ทั้งในเครื่องและ CI รัน k6 กับ API และ PostgreSQL ชั่วคราวผ่าน Docker Compose โดยใช้บัญชีจำลอง `student1@example.edu` ผล k6 เป็นเกณฑ์ก่อน deploy staging โดยไม่ต้องใช้ Google ID token หรือ GitHub secret สำหรับนักศึกษาทดสอบ วิธีนี้ยังไม่ได้วัดประสิทธิภาพของ staging ที่ deploy แล้ว จึงยังไม่ครบข้อกำหนดส่วนนั้นของ Lab 7
