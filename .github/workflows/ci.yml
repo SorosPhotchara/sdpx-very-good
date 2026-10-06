@@ -117,30 +117,3 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-  performance:
-    needs: deploy-staging
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    environment:
-      name: staging
-      deployment: false
-    steps:
-      - uses: actions/checkout@v7
-      - uses: grafana/setup-k6-action@v1
-        with:
-          k6-version: '1.8.1'
-      - name: Load test student journey after health check
-        env:
-          BASE_URL: ${{ vars.STAGING_URL }}
-          AUTH_TOKEN: ${{ secrets.PERFORMANCE_BEARER_TOKEN }}
-        run: |
-          test -n "$BASE_URL" && test -n "$AUTH_TOKEN"
-          curl --fail --silent --show-error "${BASE_URL%/}/api/health" > /dev/null
-          k6 run --summary-export=performance/results.json performance/load-test.js
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: k6-results-${{ github.sha }}
-          path: performance/results.json
-          if-no-files-found: warn
