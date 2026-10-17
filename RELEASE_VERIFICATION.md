@@ -1,6 +1,6 @@
 # PairEval release verification — 2026-10-17
 
-This records local evidence for the current uncommitted worktree. It is not a staging or production acceptance record.
+This records local verification plus the production deployment checks completed for release commit `d61ab2b`.
 
 ## Local environment and results
 
@@ -24,10 +24,14 @@ The measurements used Docker Desktop Linux engine 28.3.0 on x86_64, exposing 12 
 | Other classroom Instructor | Cannot read another classroom's setup, report, or raw responses |
 | Outsider Student | Cannot open a classroom's evaluation |
 
-CSV formula escaping, pseudonymous CSV/XLSX exports, raw-response authorization, and archived deletion are covered by backend and Chromium tests. Exported sample files and real Google account results still need to be attached to the staging acceptance record.
+CSV formula escaping, pseudonymous CSV/XLSX exports, raw-response authorization, and archived deletion are covered by backend and Chromium tests. Exported sample files and real Google account results still need to be attached to the production acceptance record.
+
+## Production checks
+
+On 2026-10-17, release commit `d61ab2b` was pushed to the Vercel production branch `develop`. The production health endpoint at `https://sdpx-very-good.vercel.app/api/health` returned HTTP 200 with `{"status":"ok"}`. The Vercel `DATABASE_URL` was confirmed by the project owners to use the inspected Neon database. Its Alembic revision was verified as `20260925_instructor_approvals`, upgraded with the repository migrations, and verified afterward as `20261017_unique_pair_votes (head)`.
 
 ## Outstanding release gates
 
-- Deploy frontend and API to the intended Vercel staging project and upgrade its separate Neon database through the two new migrations. The configured Neon database was previously at `20260925_instructor_approvals`; do not apply local test results as proof of its current revision.
-- Add the exact staging HTTPS origin to the Google OAuth client and complete Instructor and Student flows with real Google accounts, including health, publication, submission, report export, and denied access.
-- Attach the release commit, staging test results, CSV/XLSX samples, known limitations, and product-owner acceptance against the DoD.
+- Confirm the Vercel deployment detail page identifies `d61ab2b` as the active production deployment.
+- Complete Instructor and Student flows with real Google accounts on the production origin, including publication, submission, report export, and denied access.
+- Attach the real-account test results, CSV/XLSX samples, known limitations, and product-owner acceptance against the DoD.
