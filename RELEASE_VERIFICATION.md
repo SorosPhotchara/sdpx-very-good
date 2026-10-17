@@ -32,6 +32,6 @@ On 2026-10-17, release commit `d61ab2b` was pushed to the Vercel production bran
 
 ## Outstanding release gates
 
-- Confirm the Vercel deployment detail page identifies `d61ab2b` as the active production deployment.
+- Confirm the active Vercel production deployment contains release code commit `d61ab2b` or a descendant.
 - Complete Instructor and Student flows with real Google accounts on the production origin, including publication, submission, report export, and denied access.
 - Attach the real-account test results, CSV/XLSX samples, known limitations, and product-owner acceptance against the DoD.
