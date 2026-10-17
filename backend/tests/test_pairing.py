@@ -5,14 +5,17 @@ from app.pairing import allocate_group_pairs, allocate_individual_pairs
 
 
 class PairingTests(unittest.TestCase):
-    def test_group_pairs_reach_coverage_without_self_evaluation(self) -> None:
+    def test_group_pairs_use_distinct_eligible_evaluators_without_self_evaluation(self) -> None:
         groups = {10: [1, 2], 20: [3, 4], 30: [5, 6]}
         allocations = allocate_group_pairs(groups, seed=7)
 
         self.assertEqual(
             Counter((item.left_id, item.right_id) for item in allocations),
-            {(10, 20): 5, (10, 30): 5, (20, 30): 5},
+            {(10, 20): 2, (10, 30): 2, (20, 30): 2},
         )
+        self.assertEqual(len(allocations), len({
+            (item.left_id, item.right_id, item.evaluator_id) for item in allocations
+        }))
         self.assertTrue(all(
             item.evaluator_id not in groups[item.left_id]
             and item.evaluator_id not in groups[item.right_id]
@@ -27,12 +30,27 @@ class PairingTests(unittest.TestCase):
 
     def test_individual_pairs_only_use_other_group_members(self) -> None:
         allocations = allocate_individual_pairs([1, 2, 3], seed=3)
-        self.assertEqual(len(allocations), 15)
+        self.assertEqual(len(allocations), 3)
         self.assertTrue(all(
             item.evaluator_id not in (item.left_id, item.right_id)
             for item in allocations
         ))
+        self.assertEqual(len(allocations), len({
+            (item.left_id, item.right_id, item.evaluator_id) for item in allocations
+        }))
         self.assertEqual(allocate_individual_pairs([1, 2]), [])
+
+    def test_coverage_caps_at_five_distinct_eligible_evaluators(self) -> None:
+        members = list(range(1, 9))
+        allocations = allocate_individual_pairs(members, seed=11)
+        coverage = Counter((item.left_id, item.right_id) for item in allocations)
+
+        self.assertEqual(len(coverage), 28)
+        self.assertEqual(set(coverage.values()), {5})
+        self.assertEqual(len(allocations), len({
+            (item.left_id, item.right_id, item.evaluator_id) for item in allocations
+        }))
+        self.assertEqual(allocations, allocate_individual_pairs(members, seed=11))
 
     def test_target_classroom_size_covers_all_group_pairs(self) -> None:
         groups = {

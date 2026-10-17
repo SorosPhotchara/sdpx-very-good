@@ -11,6 +11,22 @@ from tests.support import TestDatabase
 
 
 class DemoSeedTests(unittest.TestCase):
+    def test_existing_prototype_room_gets_allowlisted_instructor(self) -> None:
+        database = TestDatabase()
+        try:
+            with Session(database.engine) as session:
+                session.add(models.Classroom(name="d", instructor_emails="legacy@example.edu"))
+                session.commit()
+            with patch.dict(os.environ, {
+                "APP_ENV": "development", "INSTRUCTOR_EMAILS": "teacher@example.edu"
+            }):
+                seed(database.engine)
+            with Session(database.engine) as session:
+                classroom = session.scalar(select(models.Classroom).where(models.Classroom.name == "d"))
+                self.assertIn("teacher@example.edu", classroom.instructor_emails.split(","))
+        finally:
+            database.close()
+
     def test_seed_is_idempotent_and_publishes_assignment(self) -> None:
         database = TestDatabase()
         try:

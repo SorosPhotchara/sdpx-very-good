@@ -1,9 +1,9 @@
 # Product Requirements Document
 ## Pairwise Evaluation System (PairEval)
 
-**Version:** 1.1  
-**Date:** June 2026  
-**Status:** Draft — Open Questions Resolved
+**Version:** 1.3
+**Date:** October 2026
+**Status:** DoD-aligned draft; implementation gaps tracked in TASKS.md
 
 ---
 
@@ -23,16 +23,16 @@ PairEval เป็นระบบประเมินผลนักศึก�
 ### 1.3 Key Principles
 
 - การประเมินเป็นแบบ **Pairwise Comparison** เท่านั้น (ไม่มีการให้คะแนนตรง)
-- ทุก combination ต้องได้รับการสุ่มประเมินอย่างน้อย **5 ครั้ง**
+- ทุก combination ที่ถูกต้องต้องได้รับมอบหมายให้ Student ผู้ประเมินที่เข้าเกณฑ์ไม่ซ้ำกัน `min(5, จำนวนผู้ประเมินที่เข้าเกณฑ์)` คนต่อ criterion ก่อนกระจายงานให้ใกล้เคียงกัน; ถ้ามีไม่ถึง 5 คนยัง Publish ได้ และ Report แสดงจำนวนที่ทำได้จริง จำนวนที่ส่งจริง และจำนวนที่ขาดจาก 5 คน
 - นักศึกษา/กลุ่มห้ามประเมินตนเอง
 - ระบบ Save ก่อน Submit ได้
 - **Individual Score** อัปเดตแบบ rolling ทุกวัน เจ้าตัวเห็น progress ได้ตลอดจนถึง deadline
 - **Instructor evaluation weight** กำหนดได้ต่อ Assignment (ค่า default = 1.0 แต่ปรับได้)
 - รองรับ Export คะแนนเป็น CSV และ Excel
 - **Peer anonymity:** นักศึกษาไม่เห็นว่าใครประเมินตนเอง (anonymous evaluations)
-- **Late submission:** ได้ partial credit ตาม % ของ pairs ที่ submit
+- **Partial submission:** ได้คะแนนการมีส่วนร่วมแยกตามสัดส่วน assigned pairs ที่ Submit ก่อน deadline; หลัง deadline ส่งเพิ่มไม่ได้
 - **Re-submission:** นักศึกษา submit ใหม่ได้ทุกวันก่อน deadline โดยใช้คะแนน submission ล่าสุด
-- **Group re-assignment:** เปลี่ยนกลุ่มหลัง Assignment สร้าง → ต้อง re-generate pairs
+- **Group re-assignment:** เปลี่ยนกลุ่มได้ก่อน deadline โดยคง pair ที่ยังถูกต้องและ supersede เฉพาะ pair ที่ใช้ไม่ได้
 - **Instructor weight:** ใช้ค่าเดียวสำหรับทั้ง Group และ Individual criteria
 
 ---
@@ -49,13 +49,13 @@ PairEval เป็นระบบประเมินผลนักศึก�
 | I-04 | ในฐานะอาจารย์ ฉันต้องการกำหนดคะแนนรวม แบ่งเป็น Group Score และ Individual Score |
 | I-05 | ในฐานะอาจารย์ ฉันต้องการกำหนด % น้ำหนักของแต่ละ criteria ภายใน Group/Individual |
 | I-06 | ในฐานะอาจารย์ ฉันต้องการกำหนด Deadline สำหรับการประเมิน |
-| I-07 | ในฐานะอาจารย์ ฉันต้องการประเมินคะแนนแต่ละกลุ่มแบบปกติ (ไม่ pairwise) |
+| I-07 | ในฐานะอาจารย์ ฉันต้องการประเมินแต่ละกลุ่มด้วย pairwise |
 | I-08 | ในฐานะอาจารย์ ฉันต้องการส่งบางคู่ให้ evaluator เพิ่มเติม X คน (เช่น 3 คน) |
 | I-09 | ในฐานะอาจารย์ ฉันต้องการดู Report คะแนนรวมของทุกกลุ่มและทุกคน |
 | I-10 | ในฐานะอาจารย์ ฉันต้องการดู Report ครอบคลุม: ทุก pair, จำนวน evaluation, คะแนนรวมต่อ criteria |
 | I-11 | ในฐานะอาจารย์ ฉันต้องการกำหนด Instructor Evaluation Weight สำหรับแต่ละ Assignment |
 | I-12 | ในฐานะอาจารย์ ฉันต้องการ Export คะแนนทั้งหมดเป็น CSV หรือ Excel |
-| I-13 | ในฐานะอาจารย์ ฉันต้องการ re-assign กลุ่มนักศึกษาและ regenerate pairs ได้ก่อนและหลัง deadline |
+| I-13 | ในฐานะอาจารย์ ฉันต้องการย้ายกลุ่มนักศึกษาก่อน deadline โดยรักษา pair และ submission ที่ยังถูกต้อง |
 
 ### 2.2 Student
 
@@ -67,7 +67,7 @@ PairEval เป็นระบบประเมินผลนักศึก�
 | S-04 | ในฐานะนักศึกษา ฉันต้องการ Save คำตอบก่อน Submit |
 | S-05 | ในฐานะนักศึกษา ฉันต้องการเห็นคะแนนกลุ่มของตัวเอง (หลัง deadline หรือแบบ rolling) |
 | S-06 | ในฐานะนักศึกษา ฉันต้องการเห็นคะแนนส่วนบุคคลของตัวเอง แบบ real-time ทุกวัน |
-| S-07 | ในฐานะนักศึกษาที่ไม่ประเมิน ฉันยอมรับว่าจะได้รับคะแนน 0 |
+| S-07 | ในฐานะนักศึกษาที่ไม่ประเมิน ฉันยอมรับว่าจะได้คะแนนการมีส่วนร่วม 0 ยกเว้นส่วน Individual ที่ได้รับการยกเว้น |
 | S-08 | ในฐานะนักศึกษา ฉันต้องการ re-submit คำตอบได้ทุกวันก่อน deadline โดยระบบใช้คะแนน submission ล่าสุด |
 | S-09 | ในฐานะนักศึกษา ฉันไม่ต้องการเห็นว่าใครประเมินตัวฉัน (anonymous) |
 
@@ -102,28 +102,31 @@ PairEval เป็นระบบประเมินผลนักศึก�
 - **FR-AUTH-02:** ระบบตรวจสอบ email กับรายชื่อใน Classroom โดยอัตโนมัติ
 - **FR-AUTH-03:** Instructor มีสิทธิ์แตกต่างจาก Student โดยสิ้นเชิง
 - **FR-AUTH-04:** Instructor คนเดียวกันสามารถเป็น Instructor ในหลาย Classroom
+- **FR-AUTH-05:** อีเมล Instructor ต้องอยู่ใน `INSTRUCTOR_EMAILS` ก่อนรับสิทธิ์ และ Backend ตรวจ Google ID token ทุกครั้งที่เรียก protected API
 
 ### 4.2 Classroom Management
 
 - **FR-CLASS-01:** Instructor สร้าง Classroom พร้อม upload CSV (columns: `email`, `groupname`)
 - **FR-CLASS-02:** ระบบ parse CSV และจัดกลุ่มนักศึกษาตาม `groupname` อัตโนมัติ
-- **FR-CLASS-03:** Instructor สามารถเพิ่ม/ลบ Instructor ท่านอื่นใน Classroom ได้
+- **FR-CLASS-03:** Instructor เพิ่มได้เฉพาะอีเมลใน allowlist และห้ามลบ Instructor คนสุดท้ายของ Classroom
 - **FR-CLASS-04:** Student เห็นเฉพาะ Classroom ที่ email ตนเองอยู่ใน CSV
 
 ### 4.3 Assignment Management
 
 - **FR-ASSIGN-01:** Instructor สร้าง Assignment โดยกำหนด:
   - ชื่อ Assignment
-  - คะแนนรวม (เช่น 20 คะแนน)
-  - สัดส่วน Group Score (เช่น 15 คะแนน)
-  - สัดส่วน Individual Score (เช่น 5 คะแนน)
+  - คะแนนรวม (เช่น 20 คะแนน) = Group work + Individual work + Group participation + Individual participation
+  - คะแนนเต็ม Group work (เช่น 12 คะแนน)
+  - คะแนนเต็ม Individual work (เช่น 4 คะแนน)
+  - คะแนนเต็มการมีส่วนร่วม Group และ Individual แยกกัน (เช่น 2 + 2 คะแนน)
   - Deadline สำหรับ Group Evaluation
   - Deadline สำหรับ Individual Evaluation
 - **FR-ASSIGN-02:** ภายใน Group Score กำหนด Criteria + % น้ำหนัก (รวมต้องได้ 100%)
   - ตัวอย่าง: UI 40%, Completeness 35%, Innovation 25%
 - **FR-ASSIGN-03:** ภายใน Individual Score กำหนด Criteria + % น้ำหนัก (รวมต้องได้ 100%)
   - ตัวอย่าง: Teamwork 50%, Management 50%
-- **FR-ASSIGN-04:** Instructor แก้ไข Assignment ได้ก่อน Deadline
+- **FR-ASSIGN-04:** Instructor แก้ setup ได้ก่อน Publish หรือก่อนเงื่อนไข deadline ที่ระบบกำหนด; Student เห็นเฉพาะ Assignment ที่ Publish แล้ว
+- **FR-ASSIGN-05:** Publish ต้องผ่านการตรวจว่าน้ำหนัก criteria แต่ละส่วนรวม 100% และ Classroom มีอย่างน้อย 3 กลุ่ม; กลุ่มที่มีสมาชิกน้อยกว่า 3 คนไม่เปิด Individual Evaluation และสมาชิกไม่เสียคะแนนการมีส่วนร่วมส่วนนั้น
 
 ### 4.4 Pairing Engine
 
@@ -132,40 +135,42 @@ PairEval เป็นระบบประเมินผลนักศึก�
 - **FR-PAIR-01:** สำหรับแต่ละ Criteria ของ Group Evaluation ระบบสุ่มคู่กลุ่ม (A vs B) โดย:
   - ไม่จับคู่กลุ่มกับตัวเอง
   - ครอบคลุมทุก Combination (nC2 pairs)
-  - แต่ละ combination ได้รับการประเมินอย่างน้อย 5 ครั้ง
-- **FR-PAIR-02:** แต่ละนักศึกษาได้รับ **5 คู่ต่อ criteria** ในแต่ละรอบ
-- **FR-PAIR-03:** ระบบกระจาย pair ให้ครอบคลุม combination ทั้งหมด โดย Load balance ให้แต่ละ pair ได้รับจำนวน evaluator ใกล้เคียงกัน
+  - การจัดสรรเริ่มต้นของแต่ละ combination/criterion ใช้ Student ผู้ประเมินที่เข้าเกณฑ์ไม่ซ้ำกัน `min(5, จำนวนผู้ประเมินที่เข้าเกณฑ์)` คน
+- **FR-PAIR-02:** จำนวนคู่ต่อ evaluator ต่อ criterion ปรับตาม coverage ที่ต้องการและจำนวนผู้ประเมินที่มี ไม่จำกัดตายตัวที่ 5 คู่
+- **FR-PAIR-03:** Student หนึ่งคนมีคู่/criterion เดิมที่ยังมีผลได้ไม่เกินหนึ่งรายการ; คู่ที่ supersede แล้วอยู่ในประวัติแต่ไม่นับเป็นเสียงเพิ่ม ระบบให้ coverage ตามเป้าหมายที่ทำได้จริงก่อน แล้วกระจายจำนวนงานต่อ evaluator ให้ใกล้เคียงกัน
 - **FR-PAIR-04:** กลุ่มของ evaluator ห้ามประเมินกลุ่มตัวเอง
 
 #### 4.4.2 Individual Evaluation Pairs
 
 - **FR-PAIR-05:** สำหรับแต่ละ Criteria ของ Individual Evaluation นักศึกษาแต่ละคนประเมิน **เพื่อนร่วมกลุ่มเท่านั้น**
-- **FR-PAIR-06:** ระบบสุ่มคู่ (Mr.A vs Miss.B) ภายในกลุ่ม 5 คู่ต่อ criteria
+- **FR-PAIR-06:** ระบบจัดคู่บุคคลภายในกลุ่มตามเป้าหมาย coverage ก่อน แล้วกระจายงานต่อ evaluator ให้ใกล้เคียงกัน
 - **FR-PAIR-07:** ไม่มีการประเมินตนเอง (ห้าม self-evaluation)
-- **FR-PAIR-08:** ทุก combination ภายในกลุ่มได้รับการประเมินอย่างน้อย 5 ครั้ง
+- **FR-PAIR-08:** ทุก combination ภายในกลุ่มได้รับมอบหมายให้ Student ที่เข้าเกณฑ์ไม่ซ้ำกัน `min(5, จำนวนผู้ประเมินที่เข้าเกณฑ์)` คนต่อ criterion; กลุ่มที่มีสมาชิก 3 คนจึงมีผู้ประเมินที่เข้าเกณฑ์เพียง 1 คนต่อคู่
 
 #### 4.4.3 Group Re-assignment
 
 - **FR-PAIR-09:** Instructor สามารถเปลี่ยนกลุ่มนักศึกษาได้ก่อน deadline
-- **FR-PAIR-10:** เมื่อมีการเปลี่ยนกลุ่ม ระบบต้อง **re-generate pairs ทั้งหมด** สำหรับ Assignment นั้น
-- **FR-PAIR-11:** Submissions ที่มีอยู่แล้ว (ก่อน re-generate) จะถูก **invalidate** และไม่นำมาคำนวณ
-- **FR-PAIR-12:** ระบบส่ง notification/warning แก่ Instructor ก่อน re-generate ว่า submissions เดิมจะหายไป
-- **FR-PAIR-13:** นักศึกษาที่เคย submit แล้ว จะได้รับ notification ว่าต้อง submit ใหม่ (pairs เปลี่ยนแล้ว)
-- **FR-PAIR-14:** ระบบบันทึก re-generate history (timestamp, ผู้สั่ง) สำหรับ audit
+- **FR-PAIR-10:** เมื่อย้ายกลุ่ม ระบบคง pair เดิมที่ยังถูกต้อง และสร้าง pair ทดแทนเฉพาะส่วนที่ได้รับผลกระทบ
+- **FR-PAIR-11:** Pair ที่ใช้ไม่ได้ถูก supersede โดยไม่ลบประวัติ; submission ของ pair นั้นไม่นำไปคำนวณ
+- **FR-PAIR-12:** ระบบเตือน Instructor ก่อนย้ายเมื่อ pair หรือ submission ได้รับผลกระทบ
+- **FR-PAIR-13:** Student ที่ได้รับผลกระทบเห็น notification ให้ทำรายการใหม่
+- **FR-PAIR-14:** ระบบบันทึกผู้สั่งย้าย เวลา กลุ่มเดิม และกลุ่มใหม่สำหรับ audit
 
-#### 4.4.3 Coverage Algorithm (Conceptual)
+#### 4.4.4 Coverage Algorithm (Conceptual)
 
 ```
-Input: N items (groups or individuals), target_coverage = 5
+Input: N items (groups or individuals), desired_coverage = 5
 
 total_pairs = N*(N-1)/2
-evaluations_needed = total_pairs * target_coverage
+For each criterion and subject pair:
+  eligible = distinct eligible student evaluators
+  target_evaluations = min(desired_coverage, len(eligible))
+  assign target_evaluations different students, lowest workload first
 
-For each evaluator (student):
-  assigned_pairs = sample(all_pairs, 5, weight=inverse_current_coverage)
-  exclude: pairs involving evaluator's own group/self
-
-Iterate until all pairs reach target_coverage
+Publish may proceed with target_evaluations < 5 when other publication rules pass
+Keep at most one active assignment per student and criterion/subject pair
+Balance workload after achievable coverage; use a seed for reproducible tests
+Track distinct submitted student votes separately from assignments and instructor votes
 ```
 
 ### 4.5 Evaluation UI
@@ -173,42 +178,42 @@ Iterate until all pairs reach target_coverage
 #### 4.5.1 Group Evaluation Page
 
 - **FR-EVAL-01:** หน้าเดียวแสดงทุก Criteria ของ Group Evaluation
-- **FR-EVAL-02:** แต่ละ Criteria แสดง 5 คู่ เรียงต่อกัน รูปแบบ:
+- **FR-EVAL-02:** แต่ละ Criteria แสดงคู่ที่ได้รับมอบหมาย เรียงต่อกัน รูปแบบ:
 
 ```
 [Criteria Name]
- Group A  ( ) ( ) ( ) ( ) ( ) ( )  Group B
- Group C  ( ) ( ) ( ) ( ) ( ) ( )  Group D
+ Group A  ( ) ( ) ( ) ( ) ( )  Group B
+ Group C  ( ) ( ) ( ) ( ) ( )  Group D
 ...
 
 Example:
 User Experience:
- Group A  ( ) ( ) ( ) ( ) ( ) ( )  Group B
- Group C  ( ) ( ) ( ) ( ) ( ) ( )  Group D
+ Group A  ( ) ( ) ( ) ( ) ( )  Group B
+ Group C  ( ) ( ) ( ) ( ) ( )  Group D
 ...
 
 Completeness:
- Group A  ( ) ( ) ( ) ( ) ( ) ( )  Group D
- Group B  ( ) ( ) ( ) ( ) ( ) ( )  Group E
+ Group A  ( ) ( ) ( ) ( ) ( )  Group D
+ Group B  ( ) ( ) ( ) ( ) ( )  Group E
 ...
 ```
 
 - **FR-EVAL-03:** Radio buttons 5 ระดับ (1=ซ้ายดีกว่ามาก, 3=เท่ากัน, 5=ขวาดีกว่ามาก)
 - **FR-EVAL-04:** ปุ่ม **Save** บันทึก draft ได้ตลอดเวลาก่อน submit
-- **FR-EVAL-05:** ปุ่ม **Submit** ส่งคำตอบ (ไม่สามารถแก้ไขได้หลัง submit)
+- **FR-EVAL-05:** ปุ่ม **Submit** ส่ง draft ล่าสุดของทุกคู่ในหน้านั้น; แก้และ Submit ใหม่ได้ก่อน deadline
 - **FR-EVAL-06:** ระบบเตือนหากยังมีคู่ที่ยังไม่ได้ประเมิน
 
 #### 4.5.2 Individual Evaluation Page
 
 - **FR-EVAL-07:** หน้าแยกต่างหากจาก Group Evaluation
 - **FR-EVAL-08:** แสดงเฉพาะเพื่อนในกลุ่มตัวเอง
-- **FR-EVAL-09:** แต่ละ Criteria แสดง 5 คู่ รูปแบบเดียวกับ Group
+- **FR-EVAL-09:** แต่ละ Criteria แสดงคู่ที่ได้รับมอบหมาย รูปแบบเดียวกับ Group
 - **FR-EVAL-10:** ปุ่ม Save / Submit แยกกันจาก Group Evaluation
 
 #### 4.5.3 Deadline Enforcement
 
-- **FR-EVAL-11:** หลัง Deadline ระบบปิดการ Submit
-- **FR-EVAL-12:** Draft ที่ Save ไว้แต่ยังไม่ Submit ถือว่าไม่มีการประเมิน → ได้ 0
+- **FR-EVAL-11:** หลัง Deadline ระบบปิดทั้ง Save และ Submit
+- **FR-EVAL-12:** Draft ที่ Save ไว้แต่ยังไม่ Submit ไม่นับเป็นการประเมินและไม่เพิ่มคะแนนการมีส่วนร่วม
 - **FR-EVAL-13:** แสดง Countdown timer และ Deadline ชัดเจน
 
 #### 4.5.4 Re-submission Policy
@@ -222,16 +227,15 @@ Completeness:
 
 #### 4.6.1 Pairwise Score Calculation
 
-แต่ละผลการเปรียบเทียบ A vs B (1–6) แปลงเป็น point:
+แต่ละผลการเปรียบเทียบ A vs B (1–5) แปลงเป็น point:
 
 | เลือก | A ได้ | B ได้ |
 |---|---|---|
 | 1 (A ดีกว่ามาก) | 1.0 | 0.0 |
-| 2 (A ดีกว่า) | 0.8 | 0.2 |
-| 3 (A ดีกว่าเล็กน้อย) | 0.6 | 0.4 |
-| 4 (B ดีกว่าเล็กน้อย) | 0.4 | 0.6 |
-| 5 (B ดีกว่า) | 0.2 | 0.8 |
-| 6 (B ดีกว่ามาก) | 0.0 | 1.0 |
+| 2 (A ดีกว่า) | 0.75 | 0.25 |
+| 3 (เท่ากัน) | 0.5 | 0.5 |
+| 4 (B ดีกว่า) | 0.25 | 0.75 |
+| 5 (B ดีกว่ามาก) | 0.0 | 1.0 |
 
 - **FR-SCORE-01:** คะแนนรวมต่อ item = sum ของ points ที่ได้รับ / จำนวนครั้งที่ถูกประเมิน
 - **FR-SCORE-02:** normalize ให้ผลรวมของทุก item ใน criteria = 1.0 (relative score)
@@ -239,8 +243,8 @@ Completeness:
 
 #### 4.6.2 Zero Score Rule
 
-- **FR-SCORE-04:** นักศึกษาที่ไม่ Submit ทั้ง Group และ Individual Evaluation → ได้ 0 คะแนนในส่วนนั้น
-- **FR-SCORE-05:** (Discussion) นักศึกษาที่ Save แต่ไม่ Submit ถือว่า incomplete → ได้ 0
+- **FR-SCORE-04:** นักศึกษาที่ไม่ Submit ได้คะแนนการมีส่วนร่วม 0; กลุ่มที่ยกเว้น Individual Evaluation ไม่ถูกหักคะแนนส่วนนั้น
+- **FR-SCORE-05:** Draft ที่ยังไม่ Submit ไม่นำไปคำนวณคะแนนการประเมินหรือคะแนนการมีส่วนร่วม
 
 #### 4.6.3 Instructor Evaluation Weight
 
@@ -256,26 +260,26 @@ Completeness:
 - **FR-SCORE-11:** เพื่อนร่วมกลุ่มสามารถกรอกผล Individual Evaluation ได้ทุกวัน (re-open / update ได้จนถึง deadline)
 - **FR-SCORE-12:** นักศึกษาเจ้าตัวเห็นเฉพาะคะแนนรวมของตัวเอง ไม่เห็นว่าใครให้คะแนนเท่าไร
 - **FR-SCORE-13:** คะแนนที่แสดงระหว่าง deadline มี label "Interim — อาจเปลี่ยนแปลงได้" ชัดเจน
-- **FR-SCORE-14:** คะแนน final คำนวณหลัง deadline โดยใช้ submissions ทั้งหมดที่ submit แล้ว
+- **FR-SCORE-14:** คะแนน final คำนวณหลัง deadline จาก submission snapshot ล่าสุดของแต่ละหน้าที่ Submit แล้ว
 
-#### 4.6.5 Partial Credit (Late / Incomplete Submission)
+#### 4.6.5 Participation Credit (Incomplete Submission)
 
-- **FR-SCORE-15:** นักศึกษาที่ submit บางส่วน (ไม่ครบทุก criteria หรือไม่ครบทุก pair) ได้ partial credit ตาม % ของ pairs ที่ submit
+- **FR-SCORE-15:** คะแนนการมีส่วนร่วมแยกจากคะแนน Group และ Individual; การ Submit บางคู่ก่อน deadline ได้ partial credit ตาม completion ratio
 
   ```
   completion_ratio = submitted_pairs / total_assigned_pairs
-  partial_score    = full_earned_score × completion_ratio
+  participation_score = participation_max_score × completion_ratio
   ```
 
-- **FR-SCORE-16:** คำนวณ completion_ratio แยกระหว่าง Group Evaluation และ Individual Evaluation
+- **FR-SCORE-16:** คำนวณ completion ratio จาก assigned pairs ที่ต้องทำ โดยแยกส่วน Group และ Individual และยกเว้น Individual ของกลุ่มที่มีสมาชิกน้อยกว่า 3 คน
 - **FR-SCORE-17:** หน้า Evaluation แสดง progress bar: `X / Y pairs submitted` แต่ละ criteria เพื่อให้นักศึกษาเห็น completion ของตัวเอง
-- **FR-SCORE-18:** หากไม่มี submission เลย → score = 0 (ไม่ใช่ partial)
+- **FR-SCORE-18:** หากไม่มี submission เลย → participation score = 0 สำหรับส่วนที่ต้องประเมิน
 
 #### 4.6.6 Peer Anonymity
 
-- **FR-SCORE-19:** นักศึกษาเห็นเฉพาะ **คะแนนรวมของตัวเอง** ไม่เห็นว่าใครให้คะแนนเท่าไร
+- **FR-SCORE-19:** นักศึกษาเห็นเฉพาะคะแนนกลุ่มตนและคะแนน Individual ของตน ไม่เห็นผลราย evaluator
 - **FR-SCORE-20:** Instructor เห็น evaluator ได้ใน Raw Pairs report แต่ไม่เปิดเผยต่อ student
-- **FR-SCORE-21:** Export ประเภท Raw Pairs สำหรับ Instructor จะมีชื่อ evaluator แต่ลบออกในไฟล์ที่แชร์ให้นักศึกษา
+- **FR-SCORE-21:** Instructor ตรวจตัวตน evaluator ได้ใน Raw Pairs report ที่ผ่าน authorization; ไฟล์ Export ใช้ชื่อแฝงและ Student ดาวน์โหลดไม่ได้
 
 ### 4.7 Report & Visibility
 
@@ -285,9 +289,10 @@ Completeness:
 - **FR-REPORT-02:** ดูคะแนนรวมรายบุคคลทุกคนใน Classroom
 - **FR-REPORT-03:** ดู **Pair Coverage Report** แสดง:
   - ทุก pair ที่เป็นไปได้ (กลุ่ม + บุคคล)
-  - จำนวนครั้งที่ pair นั้นถูกประเมิน
+  - ต่อคู่/criterion: `eligible_evaluators`, `target_evaluations = min(5, eligible_evaluators)`, `assigned_evaluators`, `votes` จาก Student ผู้ส่งคำตอบที่ไม่ซ้ำกัน, `missing_to_target = max(0, target_evaluations - votes)` และ `shortage_to_five = 5 - target_evaluations`
+  - `instructor_votes` นับจำนวนคำตอบ Instructor ที่ส่งจริง; `effective_votes` รวม Student vote น้ำหนัก 1 และ Instructor vote ที่ถ่วง `instructor_weight`; `left_points`/`right_points` เป็นคะแนน pairwise สะสมของสองฝั่งหลังถ่วงน้ำหนัก โดยเรียงฝั่งตาม `left_id`/`right_id`; ทั้งสี่ค่าแสดงแยกจาก Student `votes` และ Instructor votes ไม่ลด `missing_to_target`
   - ผล Pairwise score สะสมของแต่ละ pair ต่อแต่ละ criteria
-- **FR-REPORT-04:** ปุ่ม **"ส่งประเมินเพิ่ม"** สำหรับเลือก pair และส่งให้ X คนประเมินเพิ่ม (random assign)
+- **FR-REPORT-04:** ปุ่ม **"ส่งประเมินเพิ่ม"** สำหรับเลือก pair และส่งให้ Student ที่เข้าเกณฑ์ซึ่งยังไม่ได้รับคู่/criterion นั้น; ส่งเพิ่มเพื่อชดเชยผู้ที่ไม่ Submit ได้ แม้จำนวนที่มอบหมายเกินเป้าหมายเริ่มต้น
 - **FR-REPORT-05:** ปุ่ม **"ประเมินเอง"** สำหรับ Instructor เปิดหน้า pairwise evaluation ของ pair นั้น
 
 #### 4.7.2 Student Visibility
@@ -302,7 +307,7 @@ Completeness:
 - **FR-EXPORT-02:** Export รายงานได้ 3 ระดับ:
   - **Group Summary:** กลุ่ม × criteria × weighted score
   - **Individual Summary:** นักศึกษา × criteria × weighted score + total
-  - **Raw Pairs:** ทุก pair, evaluator (anonymized), score ที่ให้, timestamp
+  - **Raw Pairs:** ทุก pair, evaluator แบบชื่อแฝง, score ที่ให้, timestamp
 - **FR-EXPORT-03:** Excel export มี 3 sheet แยกกัน (Group Summary, Individual Summary, Raw Pairs)
 - **FR-EXPORT-04:** CSV export มีให้เลือกว่าจะ export sheet ไหน
 - **FR-EXPORT-05:** ชื่อไฟล์ใช้ format `{classroom}_{assignment}_{type}_{YYYYMMDD}.{ext}`
@@ -325,7 +330,7 @@ Group
 
 Assignment
 ├── id, classroom_id, name, total_score
-├── group_max_score, individual_max_score
+├── group_max_score, individual_max_score, group_participation_max, individual_participation_max
 ├── group_deadline, individual_deadline
 ├── instructor_weight  ← configurable, default 1.0
 ├── GroupCriteria[]  (name, weight%)
@@ -357,29 +362,31 @@ ComputedScore
 
 ### 6.1 Goal
 
-ทุก combination (a, b) ต้องได้รับการ evaluate ≥ 5 ครั้ง โดยแต่ละ evaluator ได้รับ 5 pairs ต่อ criteria
+ทุก combination ที่ถูกต้องได้รับมอบหมายให้ Student ผู้ประเมินที่เข้าเกณฑ์ไม่ซ้ำกัน `min(5, จำนวนผู้ประเมินที่เข้าเกณฑ์)` คนต่อ criterion; ถ้ามีน้อยกว่า 5 คนยัง Publish ได้ และต้องแสดงจำนวนที่ขาดจาก 5 คน ไม่ใช้คำตอบซ้ำจากคนเดิมแทนเสียงอิสระ
 
 ### 6.2 Algorithm Steps
 
 ```
 1. Generate all valid pairs: 
-   - GROUP: all (Gi, Gj) where i≠j, remove pairs within same group
+   - GROUP: all (Gi, Gj) where i≠j; evaluator's own group excluded when assigning
    - INDIVIDUAL: all (Pi, Pj) within same group where i≠j
 
-2. Calculate required evaluations:
-   total_needed = len(all_pairs) × 5
-   evals_per_evaluator = 5
+2. For each criterion and pair, find distinct eligible Student evaluators:
+   target_evaluations = min(5, len(eligible_evaluators))
+   shortage_to_five = 5 - target_evaluations
 
 3. Build assignment list:
-   - Repeat each pair 5 times → pool
-   - Shuffle pool
-   - Assign to evaluators in round-robin
+   - Assign each pair to target_evaluations different eligible students
+   - Prefer eligible students with the lowest workload; use the seed for ties
    - Constraint: evaluator cannot be assigned their own group/self
+   - Keep at most one active pair per student/criterion/subject pair;
+     superseded history does not contribute another vote
 
-4. Edge case: if group is small (≤ 2 groups), coverage may require 
-   same evaluator to see same pair multiple times → allowed if necessary
+4. Reject Publish if Classroom has fewer than 3 nonempty groups; skip Individual
+   Evaluation for groups with fewer than 3 members. Do not reject solely
+   because target_evaluations is below 5.
 
-5. Pre-generate all assignments when Assignment is created
+5. Generate assignments at Publish using a seed for reproducible tests
    Store as PairAssignment records
 ```
 
@@ -389,8 +396,9 @@ ComputedScore
 |---|---|
 | No self-evaluation | evaluator's group ≠ any item in pair (Group eval) |
 | No self-evaluation | evaluator ≠ any person in pair (Individual eval) |
-| Min coverage | Each pair evaluated ≥ 5 times |
-| Balanced load | Each evaluator gets exactly 5 pairs per criteria (±1 rounding) |
+| Initial coverage | Each valid pair/criterion gets `min(5, distinct eligible students)` assignments; Publish remains possible below five |
+| No duplicate votes | At most one active Student assignment per criterion/subject pair; only the latest effective submitted answer counts, while superseded history remains for audit |
+| Balanced load | Reach achievable coverage first, then keep evaluator workloads close |
 
 ---
 
@@ -431,12 +439,13 @@ Classroom Detail
 
 | Case | Behavior |
 |---|---|
-| นักศึกษาไม่ Submit เลย | ได้ 0 คะแนนในส่วนนั้น |
-| กลุ่มมีสมาชิกคนเดียว | ไม่มี Individual Evaluation สำหรับกลุ่มนั้น |
-| กลุ่มมีแค่ 2 กลุ่มทั้ง Classroom | แต่ละ pair ต้องได้ 5 evals → evaluator จะได้ pair เดิมซ้ำ |
-| Instructor ประเมินเอง | นับรวมกับ evaluation data ปกติ (มี weight ตาม config หรือ weight=1) |
-| เพิ่ม evaluator เสริม | ส่งให้ X คน random จาก pool ที่ยังไม่เคย eval pair นั้น |
-| ผลรวม Criteria weight ≠ 100% | System validation ก่อน save assignment |
+| นักศึกษาไม่ Submit เลย | ได้คะแนนการมีส่วนร่วม 0 ยกเว้นส่วน Individual ที่ได้รับการยกเว้น |
+| กลุ่มมีสมาชิกน้อยกว่า 3 คน | ไม่มี Individual Evaluation และไม่เสียคะแนนการมีส่วนร่วมส่วนนั้น |
+| Classroom มีน้อยกว่า 3 กลุ่ม | Publish ไม่สำเร็จ |
+| ผู้ประเมินที่เข้าเกณฑ์ไม่ถึง 5 คนต่อคู่/criterion | Publish ได้ถ้าเงื่อนไขอื่นผ่าน; แสดง `shortage_to_five` และไม่นับคนเดิมซ้ำเป็นหลายเสียง |
+| Instructor ประเมินเอง | ใช้ pairwise และนับด้วย `instructor_weight` ของ Assignment |
+| เพิ่ม evaluator เสริม | ส่งให้ Student ที่เข้าเกณฑ์และยังไม่ได้รับคู่/criterion นั้น; ถ้าไม่มีคนเหลือ ให้แสดงว่าเพิ่มไม่ได้ |
+| ผลรวม Criteria weight ≠ 100% | Publish ไม่สำเร็จ |
 | Email ใน CSV ไม่มีในระบบ | เพิ่ม record pending → activate เมื่อ user นั้น login ครั้งแรก |
 
 ---
@@ -449,8 +458,8 @@ Classroom Detail
 | 2 | **Individual visibility** | Rolling daily พร้อม label "Interim" จนกว่าจะ final หลัง deadline | v1.1 |
 | 3 | **Export format** | รองรับทั้ง CSV และ Excel (.xlsx), 3 ระดับ report | v1.1 |
 | 4 | **Peer anonymity** | ไม่เปิดเผย evaluator แก่นักศึกษา (anonymous ทุกกรณี) | v1.2 |
-| 5 | **Late/partial submission** | Partial credit ตาม completion_ratio (submitted/total pairs) | v1.2 |
-| 6 | **Group re-assignment** | Re-generate pairs ทั้งหมด, invalidate submissions เดิม, notify นักศึกษา | v1.2 |
+| 5 | **Partial submission** | คะแนนการมีส่วนร่วมแยกตาม completion_ratio ก่อน deadline | v1.3 |
+| 6 | **Group re-assignment** | ย้ายก่อน deadline; คง pair ที่ถูกต้องและ supersede เฉพาะ pair ที่ใช้ไม่ได้ | v1.3 |
 | 7 | **Re-submission** | Submit ใหม่ได้ทุกวันก่อน deadline — ใช้ submission ล่าสุดในการคำนวณ | v1.2 |
 | 8 | **Instructor weight scope** | ใช้ค่าเดียวกันสำหรับทั้ง Group และ Individual | v1.2 |
 

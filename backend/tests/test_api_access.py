@@ -55,6 +55,35 @@ class ApiAccessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["instructor_emails"], "teacher@example.edu")
 
+    def test_database_approval_does_not_grant_instructor_access(self) -> None:
+        with Session(self.engine) as db:
+            db.add(models.InstructorApproval(
+                email="outsider@example.edu", approved_by="admin@example.edu",
+                approved_at=datetime.now(UTC),
+            ))
+            db.commit()
+
+        def headers(email: str) -> dict[str, str]:
+            return {"Authorization": f"Bearer mock:{email}"}
+
+        with patch.dict("os.environ", {
+            "AUTH_MODE": "mock", "APP_ENV": "development",
+            "INSTRUCTOR_EMAILS": "teacher@example.edu", "ADMIN_EMAILS": "admin@example.edu",
+        }):
+            self.assertFalse(self.client.get("/me", headers=headers("outsider@example.edu")).json()["is_instructor"])
+            self.assertEqual(self.client.post("/classrooms/", json={"name": "Denied"},
+                                              headers=headers("outsider@example.edu")).status_code, 403)
+            room = self.client.post("/classrooms/", json={"name": "Allowed"},
+                                    headers=headers("teacher@example.edu")).json()["id"]
+            self.assertEqual(self.client.post(f"/classrooms/{room}/instructors",
+                                              json={"email": "outsider@example.edu"},
+                                              headers=headers("teacher@example.edu")).status_code, 422)
+            self.assertEqual(self.client.get("/admin/instructors", headers=headers("admin@example.edu")).json(),
+                             [{"email": "teacher@example.edu", "source": "environment",
+                               "approved_by": None, "approved_at": None}])
+            self.assertEqual(self.client.post("/admin/instructors", json={"email": "outsider@example.edu"},
+                                              headers=headers("admin@example.edu")).status_code, 409)
+
     def test_service_prefix_preserves_authentication_and_routes(self) -> None:
         with patch.object(app, "root_path", "/api"):
             self.assertEqual(self.client.get("/api/health").status_code, 200)
@@ -189,6 +218,7 @@ class ApiAccessTests(unittest.TestCase):
             json={
                 "title": "Review",
                 "group_score": 10,
+                "instructor_weight": 2,
                 "group_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
                 "group_criteria": [{"name": "Quality", "weight": 100}],
             },
@@ -198,10 +228,13 @@ class ApiAccessTests(unittest.TestCase):
         setup["title"] = "Revised review"
         self.assertEqual(self.client.put(path + "/setup", json=setup).status_code, 200)
         self.assertEqual(self.client.get(path + "/setup").json()["title"], "Revised review")
-        self.assertEqual(self.client.get(path + "/preview").json()["pair_assignments"], 15)
-        self.assertEqual(self.client.post(path + "/publish").json()["pair_assignments"], 15)
+        self.assertEqual(self.client.get(path + "/preview").json()["pair_assignments"], 9)
+        self.assertEqual(self.client.post(path + "/publish").json()["pair_assignments"], 9)
         published = self.client.get("/assignments/", params={"classroom_id": classroom_id}).json()[0]["published_at"]
         self.assertIsNotNone(datetime.fromisoformat(published).tzinfo)
+        self.assertEqual(self.client.post(f"/classrooms/{classroom_id}/roster/import", json={
+            "csv_text": "email,groupname\nlate@example.edu,Late",
+        }).status_code, 409)
         self.assertEqual(self.client.post(path + "/publish").status_code, 422)
         self.assertEqual(self.client.put(path + "/setup", json=setup).status_code, 422)
 
@@ -213,9 +246,27 @@ class ApiAccessTests(unittest.TestCase):
         })
         self.assertEqual(extra.status_code, 200)
         pair_id = extra.json()["pair_id"]
+        self.assertEqual(self.client.post(path + "/instructor-pairs", json={
+            "criteria_id": criterion_id, "left_id": groups[1]["id"], "right_id": groups[0]["id"],
+            "instructor_email": "TEACHER@example.edu",
+        }).status_code, 409)
         self.assertEqual(self.client.put(path + f"/instructor-pairs/{pair_id}/vote", json={"choice": 3}).status_code, 200)
         self.assertEqual(self.client.get(path + "/instructor-pairs").json()[0]["choice"], 3)
-        self.assertEqual(self.client.get(path + "/report").json()["coverage"][0]["votes"], 1)
+        report = self.client.get(path + "/report").json()
+        self.assertEqual(len(report["coverage"]), 3)
+        self.assertTrue(all({
+            "eligible_evaluators": 3, "target_evaluations": 3,
+            "assigned_evaluators": 3, "votes": 0,
+            "missing_to_target": 3, "shortage_to_five": 2,
+        }.items() <= row.items() for row in report["coverage"]))
+        instructor_pair = next(row for row in report["coverage"] if {
+            row["left_id"], row["right_id"]
+        } == {groups[0]["id"], groups[1]["id"]})
+        self.assertEqual(instructor_pair["instructor_votes"], 1)
+        self.assertEqual(instructor_pair["effective_votes"], 2.0)
+        self.assertEqual(instructor_pair["left_points"], 1.0)
+        self.assertEqual(instructor_pair["right_points"], 1.0)
+        self.assertTrue(any(row["effective_votes"] > 0 for row in report["criterion_scores"]))
 
         self.sign_in("studentA0@example.edu")
         self.assertEqual(self.client.get(path + "/preview").status_code, 403)
@@ -237,3 +288,23 @@ class ApiAccessTests(unittest.TestCase):
             self.client.get("/assignments/", params={"classroom_id": classroom_id}).json(),
             [],
         )
+
+    def test_assignment_total_maximum_matches_four_components(self) -> None:
+        self.sign_in("teacher@example.edu", is_instructor=True)
+        classroom_id = self.client.post("/classrooms/", json={"name": "Course"}).json()["id"]
+        deadline = (datetime.now(UTC) + timedelta(days=7)).isoformat()
+        setup = {
+            "title": "Review", "group_score": 10, "individual_score": 4,
+            "group_participation_max": 2, "individual_participation_max": 1,
+            "total_score": 17, "group_deadline": deadline, "individual_deadline": deadline,
+            "group_criteria": [{"name": "Quality", "weight": 100}],
+            "individual_criteria": [{"name": "Contribution", "weight": 100}],
+        }
+        path = f"/classrooms/{classroom_id}/assignments"
+        self.assertEqual(self.client.post(path, json={**setup, "total_score": 18}).status_code, 422)
+        created = self.client.post(path, json=setup)
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(created.json()["total_score"], 17)
+        assignment_id = created.json()["id"]
+        self.assertEqual(self.client.get(f"/assignments/{assignment_id}/setup").json()["total_score"], 17)
+        self.assertEqual(self.client.get("/assignments/", params={"classroom_id": classroom_id}).json()[0]["total_score"], 17)

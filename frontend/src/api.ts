@@ -44,9 +44,20 @@ export type StudentScore = {
 export type AssignmentReport = {
   assignment_id: number; title: string; students: StudentScore[]
   groups: { group_id: number; name: string; work_score: number | null }[]
-  coverage: { section: string; criterion: string; left_id: number; right_id: number; votes: number; missing_to_five: number }[]
+  coverage: {
+    section: string; criterion_id: number; criterion: string; left_id: number; right_id: number
+    eligible_evaluators: number; target_evaluations: number; assigned_evaluators: number
+    votes: number; instructor_votes: number; effective_votes: number
+    left_points: number; right_points: number
+    missing_to_target: number; shortage_to_five: number
+  }[]
   criterion_scores: { criterion_id: number; criterion: string; section: string; item_id: number; weighted_score: number | null; effective_votes: number }[]
   group_final: boolean; individual_final: boolean
+}
+export type RawPairResponse = {
+  pair_id: number; section: 'group' | 'individual'; criterion_id: number; criterion: string
+  left_id: number; right_id: number; left: string; right: string
+  evaluator_student_id: number | null; evaluator: string; choice: number | null; submitted_at: string | null
 }
 let credential: string | null = null
 
@@ -215,6 +226,20 @@ export async function addInstructorPair(assignmentId: number, data: { criteria_i
   return readJson<{ pair_id: number }>(response)
 }
 
+export async function addStudentPair(assignmentId: number, data: { criteria_id: number; left_id: number; right_id: number; student_id: number }): Promise<{ pair_id: number }> {
+  const response = await fetch(`${API_BASE}/assignments/${assignmentId}/student-pairs`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(data),
+  })
+  return readJson<{ pair_id: number }>(response)
+}
+
+export async function previewReassignment(classroomId: number, studentId: number, groupId: number): Promise<{
+  changed_pairs: number; superseded_pairs: number; new_pairs: number; affected_submissions: number; notified_students: number
+}> {
+  const response = await fetch(`${API_BASE}/classrooms/${classroomId}/students/${studentId}/group/preview?group_id=${groupId}`, { headers: authHeaders() })
+  return readJson(response)
+}
+
 export async function getInstructorPairs(assignmentId: number): Promise<InstructorPair[]> {
   const response = await fetch(`${API_BASE}/assignments/${assignmentId}/instructor-pairs`, { headers: authHeaders() })
   return readJson<InstructorPair[]>(response)
@@ -291,28 +316,38 @@ export async function getAssignmentReport(assignmentId: number): Promise<Assignm
   return readJson<AssignmentReport>(response)
 }
 
-export async function downloadReportCsv(assignmentId: number, sheet: 'groups' | 'students' | 'pairs'): Promise<void> {
-  const response = await fetch(`${API_BASE}/assignments/${assignmentId}/report/${sheet}.csv`, { headers: authHeaders() })
+export async function getRawPairResponses(assignmentId: number): Promise<RawPairResponse[]> {
+  const response = await fetch(`${API_BASE}/assignments/${assignmentId}/report/raw-pairs`, { headers: authHeaders() })
+  return readJson<RawPairResponse[]>(response)
+}
+
+function downloadFilename(response: Response): string {
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1]
+  if (encoded) {
+    try { return decodeURIComponent(encoded) } catch { /* Use the ASCII fallback below. */ }
+  }
+  return /filename="([^"]+)"/i.exec(disposition)?.[1] || 'report'
+}
+
+async function downloadReport(response: Response): Promise<void> {
   if (!response.ok) throw new Error(`Export failed: ${response.status}`)
   const url = URL.createObjectURL(await response.blob())
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `assignment-${assignmentId}-${sheet}.csv`
+  anchor.download = downloadFilename(response)
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
   URL.revokeObjectURL(url)
 }
 
+export async function downloadReportCsv(assignmentId: number, sheet: 'groups' | 'students' | 'pairs'): Promise<void> {
+  const response = await fetch(`${API_BASE}/assignments/${assignmentId}/report/${sheet}.csv`, { headers: authHeaders() })
+  await downloadReport(response)
+}
+
 export async function downloadReportXlsx(assignmentId: number): Promise<void> {
   const response = await fetch(`${API_BASE}/assignments/${assignmentId}/report.xlsx`, { headers: authHeaders() })
-  if (!response.ok) throw new Error(`Export failed: ${response.status}`)
-  const url = URL.createObjectURL(await response.blob())
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = `assignment-${assignmentId}.xlsx`
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  URL.revokeObjectURL(url)
+  await downloadReport(response)
 }

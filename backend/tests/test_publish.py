@@ -51,10 +51,15 @@ class PublishTests(unittest.TestCase):
         published_count = publish(self.db, self.assignment.id)
         pairs = self.db.query(models.Pair).all()
 
-        self.assertEqual(preview_count, 60)
+        self.assertEqual(preview_count, 18)
         self.assertEqual(published_count, preview_count)
         self.assertEqual(len(pairs), preview_count)
         self.assertTrue(all(pair.assigned_to_student_id is not None for pair in pairs))
+        self.assertEqual(len(pairs), len({
+            (pair.criteria_id, pair.left_group_id or pair.left_id,
+             pair.right_group_id or pair.right_id, pair.assigned_to_student_id)
+            for pair in pairs
+        }))
         with self.assertRaisesRegex(ValueError, "already published"):
             publish(self.db, self.assignment.id)
 

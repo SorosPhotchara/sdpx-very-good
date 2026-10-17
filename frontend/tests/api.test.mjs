@@ -97,3 +97,31 @@ test("draft save sends only changed choices and submit sends the saved page snap
   await api.saveEvaluationDraft(9, "group", [{ pair_id: 42, choice: 3 }])
   assert.deepEqual(await api.submitEvaluation(9, "group"), { submission_id: 3, answered: 1, assigned: 5 })
 })
+
+test("report download uses the UTF-8 filename supplied by the authorized API", async () => {
+  api.setCredential("test-id-token")
+  const originalDocument = globalThis.document
+  const originalCreateObjectURL = URL.createObjectURL
+  const originalRevokeObjectURL = URL.revokeObjectURL
+  let downloaded = ""
+  const anchor = { href: "", download: "", click() { downloaded = this.download }, remove() {} }
+  globalThis.document = { createElement: () => anchor, body: { appendChild() {} } }
+  URL.createObjectURL = () => "blob:report"
+  URL.revokeObjectURL = () => {}
+  const filename = "ห้อง_งาน_raw_pairs_20261016.csv"
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, "http://localhost:8000/assignments/9/report/pairs.csv")
+    assert.equal(options.headers.Authorization, "Bearer test-id-token")
+    return new Response("section,criterion", { status: 200, headers: {
+      "Content-Disposition": `attachment; filename="fallback.csv"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    } })
+  }
+  try {
+    await api.downloadReportCsv(9, "pairs")
+    assert.equal(downloaded, filename)
+  } finally {
+    globalThis.document = originalDocument
+    URL.createObjectURL = originalCreateObjectURL
+    URL.revokeObjectURL = originalRevokeObjectURL
+  }
+})

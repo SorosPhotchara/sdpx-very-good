@@ -14,11 +14,12 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
-Backend โหลด `backend/.env` ผ่าน `python-dotenv` อัตโนมัติ ไฟล์นี้ถูก ignore โดย Git; ตัวอย่างค่าที่ต้องมีอยู่ใน `.env.example` `DATABASE_URL` ต้องชี้ไป PostgreSQL และไม่มีค่าเริ่มต้นอัตโนมัติ `seed_demo.py` รักษาห้องต้นแบบ 4 ห้องและเพิ่มห้องเดโมที่มี 3 กลุ่มและ 9 นักศึกษาแบบเรียกซ้ำได้ โดยไม่แก้ข้อมูลห้องเรียนเดิม
+Backend โหลด `backend/.env` ผ่าน `python-dotenv` อัตโนมัติ ไฟล์นี้ถูก ignore โดย Git; ตัวอย่างค่าที่ต้องมีอยู่ใน `.env.example` `DATABASE_URL` ต้องชี้ไป PostgreSQL และไม่มีค่าเริ่มต้นอัตโนมัติ `seed_demo.py` รักษาห้องต้นแบบ 4 ห้อง เพิ่มอาจารย์คนแรกใน allowlist ให้ห้องต้นแบบที่มีอยู่ และเพิ่มห้องเดโมที่มี 3 กลุ่มและ 9 นักศึกษาแบบเรียกซ้ำได้
+กำหนด `INSTRUCTOR_EMAILS` ก่อนรัน migration กับฐานที่มีห้องต้นแบบเดิม เพื่อให้ migration เพิ่มอาจารย์คนแรกใน allowlist เป็นเจ้าของห้องโดยคงอาจารย์เดิมไว้
 
 ## Authentication
 
-โหมดปกติใช้ Google Sign-In: frontend ส่ง Google ID token ให้ API และ backend ตรวจ audience ด้วย `GOOGLE_CLIENT_ID` รวมทั้งตรวจว่าอีเมลได้รับการยืนยันจาก Google ผู้ดูแลระบบเริ่มต้นกำหนดผ่าน `ADMIN_EMAILS`; อาจารย์เริ่มต้นกำหนดได้ใน `INSTRUCTOR_EMAILS` หรือเพิ่มจากหน้า Admin ซึ่งบันทึกใน PostgreSQL อาจารย์ที่ได้รับอนุมัติแล้วจึงเชิญเข้าห้องเรียนได้ นักศึกษาต้องมีอีเมลตรงกับ roster CSV ของห้องนั้น ไม่มี endpoint สมัครบัญชีด้วยรหัสผ่าน
+โหมดปกติใช้ Google Sign-In: frontend ส่ง Google ID token ให้ API และ backend ตรวจ audience ด้วย `GOOGLE_CLIENT_ID` รวมทั้งตรวจว่าอีเมลได้รับการยืนยันจาก Google ผู้ดูแลระบบกำหนดผ่าน `ADMIN_EMAILS`; สิทธิ์อาจารย์กำหนดผ่าน `INSTRUCTOR_EMAILS` เท่านั้น หน้า Admin แสดงรายชื่ออาจารย์ที่กำหนดไว้ แต่ไม่เพิ่มหรือถอนสิทธิ์จากฐานข้อมูล อาจารย์ที่อยู่ใน allowlist จึงเชิญเข้าห้องเรียนได้ นักศึกษาต้องมีอีเมลตรงกับ roster CSV ของห้องนั้น ไม่มี endpoint สมัครบัญชีด้วยรหัสผ่าน
 
 `AUTH_MODE=mock` ใช้ได้เฉพาะเมื่อ `APP_ENV=development` สำหรับเดโมในเครื่อง โหมดนี้ไม่มีการยืนยันตัวตนจริง อย่าเปิดในการ deploy
 

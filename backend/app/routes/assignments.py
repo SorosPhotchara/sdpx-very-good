@@ -6,7 +6,7 @@ from .. import models, schemas
 from ..assignment_setup import create_assignment as create_complete_assignment, update_assignment as update_complete_assignment
 from ..auth import Identity, current_identity
 from ..dependencies import get_db, instructor_emails, require_owner, utc_deadline, validate_page
-from ..instructor_evaluation import assign_pair, read_instructor_pairs, save_instructor_vote
+from ..instructor_evaluation import assign_pair, assign_student_pair, read_instructor_pairs, save_instructor_vote
 from ..publish import build_plan, publish
 
 router = APIRouter(dependencies=[Depends(current_identity)])
@@ -154,6 +154,19 @@ def add_instructor_pair(
         raise HTTPException(404, "Assignment not found")
     classroom = require_owner(assignment.classroom_id, identity, db)
     pair = assign_pair(db, assignment, payload, instructor_emails(classroom))
+    return {"pair_id": pair.id}
+
+
+@router.post("/assignments/{assignment_id}/student-pairs")
+def add_student_pair(
+    assignment_id: int, payload: schemas.StudentPairRequest,
+    identity: Identity = Depends(current_identity), db: Session = Depends(get_db),
+) -> dict:
+    assignment = db.get(models.Assignment, assignment_id)
+    if assignment is None:
+        raise HTTPException(404, "Assignment not found")
+    require_owner(assignment.classroom_id, identity, db)
+    pair = assign_student_pair(db, assignment, payload)
     return {"pair_id": pair.id}
 
 

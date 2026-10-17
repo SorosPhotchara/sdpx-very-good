@@ -115,6 +115,8 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
   const [pairPreviews, setPairPreviews] = useState<Record<number, PairPreview>>({})
   const [pairAction, setPairAction] = useState<{ id: number; publish: boolean } | null>(null)
   const editorRef = useRef<HTMLDetailsElement>(null)
+  const totalScore = Number(group.score || 0) + Number(individual.score || 0)
+    + Number(group.participation || 0) + Number(individual.participation || 0)
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault()
@@ -131,12 +133,13 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
     }
     if (!action.begin()) return
     try {
-    const setup: AssignmentSetup = {
+    const setup: AssignmentSetup & { total_score: number } = {
       title,
       group_score: Number(group.score),
       individual_score: Number(individual.score),
       group_participation_max: Number(group.participation),
       individual_participation_max: Number(individual.participation),
+      total_score: totalScore,
       instructor_weight: Number(instructorWeight),
       group_deadline: toDeadline(group.deadline),
       individual_deadline: toDeadline(individual.deadline),
@@ -249,6 +252,9 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email }: { clas
         </label>
         <SectionEditor title={t('Group evaluation')} value={group} onChange={setGroup} />
         <SectionEditor title={t('Individual evaluation')} value={individual} onChange={setIndividual} />
+        <p className="my-3 text-sm font-medium" data-testid="assignment-total-score">
+          {language === 'th' ? 'คะแนนเต็มรวม' : 'Assignment total maximum'}: {totalScore.toFixed(2)}
+        </p>
         <label className="block text-sm">{t('Instructor vote weight')}
           <Input type="number" min="0.1" step="0.1" value={instructorWeight} onChange={(event) => setInstructorWeight(event.target.value)} className="mt-1" />
         </label>

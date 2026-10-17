@@ -23,8 +23,12 @@ class EvaluationApiTests(unittest.TestCase):
         self.client = TestClient(app)
         self.sign_in("teacher@example.edu", True)
         classroom_id = self.client.post("/classrooms/", json={"name": "Course"}).json()["id"]
-        roster = "email,groupname\n" + "\n".join(f"{group}{index}@example.edu,{group}" for group in "ABC" for index in range(3))
-        self.assertEqual(self.client.post(f"/classrooms/{classroom_id}/roster/import", json={"csv_text": roster}).json()["imported"], 9)
+        self.classroom_id = classroom_id
+        roster = "email,groupname\n" + "\n".join(
+            f"{group}{index}@example.edu,{group}"
+            for group in "ABC" for index in range(6 if group == "C" else 3)
+        )
+        self.assertEqual(self.client.post(f"/classrooms/{classroom_id}/roster/import", json={"csv_text": roster}).json()["imported"], 12)
         self.assignment_id = self.client.post(f"/classrooms/{classroom_id}/assignments", json={
             "title": "Review", "group_score": 10, "group_participation_max": 5,
             "group_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
@@ -35,6 +39,7 @@ class EvaluationApiTests(unittest.TestCase):
             pair = db.query(models.Pair).first()
             student = db.get(models.Student, pair.assigned_to_student_id)
             self.email = student.email
+            self.student_id = student.id
             self.pair_id = pair.id
             self.other_pair_id = db.query(models.Pair.id).filter(
                 models.Pair.assigned_to_student_id != student.id).first()[0]
@@ -115,13 +120,46 @@ class EvaluationApiTests(unittest.TestCase):
         self.assertNotIn("students", after)
         self.sign_in("teacher@example.edu", True)
         report = self.client.get(f"/assignments/{self.assignment_id}/report").json()
-        self.assertEqual(len(report["students"]), 9)
+        self.assertEqual(len(report["students"]), 12)
         self.assertTrue(any(group["work_score"] is not None for group in report["groups"]))
-        self.assertTrue(any(row["votes"] == 1 for row in report["coverage"]))
+        with Session(self.engine) as db:
+            pair = db.get(models.Pair, self.pair_id)
+            pair_ids = {pair.left_group_id, pair.right_group_id}
+        voted = next(row for row in report["coverage"] if {row["left_id"], row["right_id"]} == pair_ids)
+        self.assertEqual(voted["votes"], 1)
+        self.assertEqual(voted["missing_to_target"], voted["target_evaluations"] - 1)
+        self.assertEqual(voted["shortage_to_five"], 5 - voted["target_evaluations"])
         exported = self.client.get(f"/assignments/{self.assignment_id}/report/pairs.csv")
         self.assertEqual(exported.status_code, 200)
         self.assertIn("Evaluator 1", exported.text)
         self.assertNotIn(self.email, exported.text)
+
+    def test_raw_pair_report_shows_latest_evaluator_answer_only_to_instructor(self) -> None:
+        path = f"/assignments/{self.assignment_id}/report/raw-pairs"
+        self.sign_in(self.email)
+        self.assertEqual(self.client.get(path).status_code, 403)
+        self.client.put(self.path + "/draft", json={"changes": [{"pair_id": self.pair_id, "choice": 1}]})
+        self.client.post(self.path + "/submit")
+        self.client.put(self.path + "/draft", json={"changes": [{"pair_id": self.pair_id, "choice": 5}]})
+        self.client.post(self.path + "/submit")
+        self.sign_in("other@example.edu", True)
+        self.assertEqual(self.client.get(path).status_code, 403)
+        self.sign_in("teacher@example.edu", True)
+        response = self.client.get(path)
+        self.assertEqual(response.status_code, 200)
+        row = next(item for item in response.json() if item["pair_id"] == self.pair_id)
+        self.assertIsInstance(row["criterion_id"], int)
+        self.assertEqual(row["evaluator_student_id"], self.student_id)
+        self.assertEqual(row["evaluator"], self.email)
+        self.assertEqual(row["choice"], 5)
+        self.assertIsNotNone(row["submitted_at"])
+        csv_response = self.client.get(f"/assignments/{self.assignment_id}/report/pairs.csv",
+                                       headers={"Origin": "http://localhost:5173"})
+        self.assertNotIn(self.email, csv_response.text)
+        self.assertRegex(csv_response.headers["content-disposition"], r'Course_Review_raw_pairs_\d{8}\.csv')
+        self.assertIn("Content-Disposition", csv_response.headers["access-control-expose-headers"])
+        xlsx_response = self.client.get(f"/assignments/{self.assignment_id}/report.xlsx")
+        self.assertRegex(xlsx_response.headers["content-disposition"], r'Course_Review_report_\d{8}\.xlsx')
 
     def test_reassignment_preserves_eligible_pairs_and_records_notifications(self) -> None:
         with Session(self.engine) as db:
@@ -138,7 +176,135 @@ class EvaluationApiTests(unittest.TestCase):
         self.assertTrue(all(item["votes"] == 0 for item in report["coverage"]))
         with Session(self.engine) as db:
             self.assertTrue(db.query(models.Pair).filter(models.Pair.superseded_at.is_not(None)).first())
-            self.assertEqual(db.query(models.Pair).filter_by(assignment_id=self.assignment_id, superseded_at=None).count(), 15)
+            self.assertEqual(db.query(models.Pair).filter_by(assignment_id=self.assignment_id, superseded_at=None).count(), 11)
         self.sign_in("a0@example.edu")
         self.assertTrue(self.client.get("/classrooms/1/notifications").json())
         self.assertEqual(self.client.put(path, json={"group_id": target_id}).status_code, 403)
+
+    def test_instructor_assigns_extra_student_pairs_with_eligibility_checks(self) -> None:
+        with Session(self.engine) as db:
+            criterion_id = db.query(models.Criteria.id).filter_by(assignment_id=self.assignment_id).first()[0]
+            groups = {group.name: group.id for group in db.query(models.Group).all()}
+            students = {student.email: student.id for student in db.query(models.Student).all()}
+            assigned = {
+                pair.assigned_to_student_id
+                for pair in db.query(models.Pair).filter_by(criteria_id=criterion_id, superseded_at=None)
+                if {pair.left_group_id, pair.right_group_id} == {groups["A"], groups["B"]}
+            }
+            extra_student = next(student for student in db.query(models.Student).filter_by(group_id=groups["C"])
+                                 if student.id not in assigned)
+        payload = {"criteria_id": criterion_id, "left_id": groups["A"], "right_id": groups["B"],
+                   "student_id": extra_student.id}
+        path = f"/assignments/{self.assignment_id}/student-pairs"
+        self.assertEqual(self.client.post(path, json={**payload, "student_id": next(iter(assigned)),
+                                                       "left_id": groups["B"], "right_id": groups["A"]}).status_code, 409)
+        added = self.client.post(path, json=payload)
+        self.assertEqual(added.status_code, 200)
+        self.assertEqual(self.client.post(path, json={**payload, "left_id": groups["B"],
+                                                       "right_id": groups["A"]}).status_code, 409)
+        self.assertEqual(self.client.post(path, json={**payload, "student_id": students["a0@example.edu"]}).status_code, 422)
+        self.assertEqual(self.client.post(path, json={**payload, "student_id": 999999}).status_code, 422)
+        report = self.client.get(f"/assignments/{self.assignment_id}/report").json()
+        covered = next(row for row in report["coverage"] if {row["left_id"], row["right_id"]} ==
+                       {groups["A"], groups["B"]})
+        self.assertEqual((covered["eligible_evaluators"], covered["target_evaluations"],
+                          covered["assigned_evaluators"], covered["votes"]), (6, 5, 6, 0))
+        self.sign_in(extra_student.email)
+        self.assertEqual(self.client.post(path, json=payload).status_code, 403)
+        pair_id = added.json()["pair_id"]
+        self.assertIn(pair_id, [pair["id"] for pair in self.client.get(self.path).json()["pairs"]])
+        self.assertEqual(self.client.put(self.path + "/draft", json={"changes": [
+            {"pair_id": pair_id, "choice": 3},
+        ]}).status_code, 200)
+        self.assertEqual(self.client.post(self.path + "/submit").status_code, 200)
+
+        self.sign_in("teacher@example.edu", True)
+        report = self.client.get(f"/assignments/{self.assignment_id}/report").json()
+        covered = next(row for row in report["coverage"] if {row["left_id"], row["right_id"]} ==
+                       {groups["A"], groups["B"]})
+        self.assertEqual((covered["votes"], covered["missing_to_target"],
+                          covered["shortage_to_five"]), (1, 4, 0))
+
+    def test_instructor_assigns_extra_individual_pair_to_unused_peer(self) -> None:
+        self.sign_in("teacher@example.edu", True)
+        classroom_id = self.client.post("/classrooms/", json={"name": "Individual course"}).json()["id"]
+        roster = "email,groupname\n" + "\n".join(
+            [*(f"A{index}@individual.edu,A" for index in range(8)),
+             "B0@individual.edu,B", "C0@individual.edu,C"]
+        )
+        self.assertEqual(self.client.post(f"/classrooms/{classroom_id}/roster/import",
+                                          json={"csv_text": roster}).json()["imported"], 10)
+        individual_id = self.client.post(f"/classrooms/{classroom_id}/assignments", json={
+            "title": "Individual", "individual_score": 10,
+            "individual_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
+            "individual_criteria": [{"name": "Contribution", "weight": 100}],
+        }).json()["id"]
+        self.assertEqual(self.client.post(f"/assignments/{individual_id}/publish").status_code, 200)
+        with Session(self.engine) as db:
+            criterion_id = db.query(models.Criteria.id).filter_by(assignment_id=individual_id).first()[0]
+            students = {student.email: student.id for student in db.query(models.Student).filter_by(classroom_id=classroom_id)}
+            left_id, right_id = students["a0@individual.edu"], students["a1@individual.edu"]
+            assigned = {
+                pair.assigned_to_student_id
+                for pair in db.query(models.Pair).filter_by(criteria_id=criterion_id, superseded_at=None)
+                if {pair.left_id, pair.right_id} == {left_id, right_id}
+            }
+            spare = next(student_id for email, student_id in students.items()
+                         if email.startswith("a") and student_id not in assigned and student_id not in (left_id, right_id))
+        individual_path = f"/assignments/{individual_id}/student-pairs"
+        individual = {"criteria_id": criterion_id, "left_id": left_id,
+                      "right_id": right_id, "student_id": spare}
+        self.assertEqual(len(assigned), 5)
+        self.assertEqual(self.client.post(individual_path, json={**individual, "student_id": next(iter(assigned)),
+                                                                  "left_id": right_id, "right_id": left_id}).status_code, 409)
+        self.assertEqual(self.client.post(individual_path, json=individual).status_code, 200)
+        self.assertEqual(self.client.post(individual_path, json=individual).status_code, 409)
+        self.assertEqual(self.client.post(individual_path, json={**individual, "student_id": left_id}).status_code, 422)
+        self.assertEqual(self.client.post(individual_path, json={**individual,
+                                                                 "student_id": students["b0@individual.edu"]}).status_code, 422)
+        self.assertEqual(self.client.post(individual_path, json={**individual,
+                                                                 "right_id": students["b0@individual.edu"]}).status_code, 422)
+
+    def test_reassignment_preview_warns_about_submitted_answers_without_mutating(self) -> None:
+        with Session(self.engine) as db:
+            student = db.query(models.Student).filter_by(email="a0@example.edu").first()
+            target = db.query(models.Group).filter_by(name="B").first()
+            group_a = db.query(models.Group).filter_by(name="A").first()
+            criterion = db.query(models.Criteria).filter_by(assignment_id=self.assignment_id).first()
+            assigned = db.query(models.Pair).filter_by(assigned_to_student_id=student.id).first()
+            busy = {
+                pair.assigned_to_student_id
+                for pair in db.query(models.Pair).filter_by(criteria_id=criterion.id, superseded_at=None)
+                if {pair.left_group_id, pair.right_group_id} == {group_a.id, target.id}
+            }
+            evaluator = next(candidate for candidate in db.query(models.Student).filter_by(classroom_id=self.classroom_id)
+                             if candidate.group_id not in (group_a.id, target.id) and candidate.id not in busy)
+            student_id, old_group_id, target_id = student.id, group_a.id, target.id
+            extra_payload = {"criteria_id": criterion.id, "left_id": group_a.id,
+                             "right_id": target.id, "student_id": evaluator.id}
+            affected_pair_id = assigned.id
+        self.sign_in("a0@example.edu")
+        self.assertEqual(self.client.put(self.path + "/draft", json={"changes": [
+            {"pair_id": affected_pair_id, "choice": 3},
+        ]}).status_code, 200)
+        self.assertEqual(self.client.post(self.path + "/submit").status_code, 200)
+        self.sign_in("teacher@example.edu", True)
+        extra = self.client.post(f"/assignments/{self.assignment_id}/student-pairs", json=extra_payload)
+        self.assertEqual(extra.status_code, 200)
+        extra_id = extra.json()["pair_id"]
+        path = f"/classrooms/{self.classroom_id}/students/{student_id}/group"
+        preview = self.client.get(path + "/preview", params={"group_id": target_id})
+        self.assertEqual(preview.status_code, 200)
+        self.assertGreater(preview.json()["changed_pairs"], 0)
+        self.assertGreater(preview.json()["affected_submissions"], 0)
+        with Session(self.engine) as db:
+            self.assertEqual(db.get(models.Student, student_id).group_id, old_group_id)
+            self.assertIsNone(db.get(models.Pair, affected_pair_id).superseded_at)
+            self.assertEqual(db.query(models.Reassignment).count(), 0)
+        moved = self.client.put(path, json={"group_id": target_id})
+        self.assertEqual(moved.status_code, 200)
+        for key in ("changed_pairs", "new_pairs", "superseded_pairs", "affected_submissions"):
+            self.assertEqual(moved.json()[key], preview.json()[key])
+        with Session(self.engine) as db:
+            self.assertIsNotNone(db.get(models.Pair, affected_pair_id).superseded_at)
+            self.assertIsNone(db.get(models.Pair, extra_id).superseded_at)

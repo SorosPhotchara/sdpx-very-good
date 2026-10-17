@@ -48,8 +48,8 @@ export function EvaluationWorkspace({ assignmentId, section, initiallyOpen = tru
     {resource.error && <div role="alert">{resource.error} <button type="button" onClick={() => void resource.refresh()}>{t('Retry')}</button></div>}
     {section === 'individual' && <p className="evaluation-context">{page
       ? language === 'th'
-        ? `กลุ่มของคุณ: ${page.group_name || 'ยังไม่ระบุกลุ่ม'} · ประเมินเฉพาะสมาชิกในกลุ่มนี้ ไม่ประเมินข้ามกลุ่ม คู่เดิมอาจแสดงซ้ำในกลุ่มขนาดเล็กเพราะระบบตั้งเป้า 5 ผลประเมินต่อคู่และเกณฑ์`
-        : `Your group: ${page.group_name || 'Not assigned'} · Evaluate members of this group only, not across groups. Pairs may repeat in smaller groups to reach five evaluations per pair and criterion.`
+        ? `กลุ่มของคุณ: ${page.group_name || 'ยังไม่ระบุกลุ่ม'} · ประเมินเฉพาะสมาชิกในกลุ่มนี้ ไม่ประเมินข้ามกลุ่ม นักศึกษาหนึ่งคนประเมินแต่ละคู่ได้หนึ่งครั้ง หากมีผู้มีสิทธิ์ไม่ครบ 5 คน คู่นั้นอาจมีคำตอบน้อยกว่า 5`
+        : `Your group: ${page.group_name || 'Not assigned'} · Evaluate members of this group only, not across groups. Each student evaluates a given pair once. A pair may receive fewer than five responses when fewer than five students are eligible.`
       : language === 'th' ? 'กำลังโหลดข้อมูลกลุ่มของคุณ…' : 'Loading your group…'}</p>}
     {page && <>
       {page.is_open && page.pairs.length > 0 && <p className="evaluation-help">{language === 'th'

@@ -1,7 +1,8 @@
 from datetime import datetime
+from math import isclose, isfinite
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator, model_validator
 
 from .timezone import as_utc
 
@@ -99,6 +100,12 @@ class AssignmentBase(BaseModel):
     individual_deadline: Optional[datetime] = None
     published_at: Optional[datetime] = None
 
+    @computed_field(return_type=float)
+    @property
+    def total_score(self) -> float:
+        return (self.group_score + self.individual_score
+                + self.group_participation_max + self.individual_participation_max)
+
     @field_validator("deadline", "group_deadline", "individual_deadline", "published_at", mode="before")
     @classmethod
     def timestamps_are_utc(cls, value: datetime | None) -> datetime | None:
@@ -160,11 +167,29 @@ class AssignmentSetup(BaseModel):
     individual_score: float = 0.0
     group_participation_max: float = 0.0
     individual_participation_max: float = 0.0
+    total_score: float | None = None
     instructor_weight: float = 1.0
     group_deadline: datetime | None = None
     individual_deadline: datetime | None = None
     group_criteria: list[CriterionInput] = Field(default_factory=list)
     individual_criteria: list[CriterionInput] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def total_matches_section_maxima(self) -> "AssignmentSetup":
+        maxima = (self.group_score, self.individual_score,
+                  self.group_participation_max, self.individual_participation_max)
+        if any(not isfinite(value) or value < 0 for value in maxima):
+            raise ValueError("Score maxima must be finite and nonnegative")
+        if not isfinite(self.instructor_weight) or self.instructor_weight <= 0:
+            raise ValueError("Instructor weight must be finite and positive")
+        expected = sum(maxima)
+        if self.total_score is not None and (
+            not isfinite(self.total_score)
+            or not isclose(self.total_score, expected, rel_tol=0, abs_tol=1e-6)
+        ):
+            raise ValueError("Total score must equal the sum of section maxima")
+        self.total_score = expected
+        return self
 
 
 class DraftChange(BaseModel):
@@ -185,6 +210,13 @@ class InstructorPairRequest(BaseModel):
     left_id: int
     right_id: int
     instructor_email: EmailStr
+
+
+class StudentPairRequest(BaseModel):
+    criteria_id: int
+    left_id: int
+    right_id: int
+    student_id: int
 
 
 class InstructorVoteRequest(BaseModel):

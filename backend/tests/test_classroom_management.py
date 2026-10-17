@@ -1,8 +1,9 @@
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import crud, models
@@ -99,6 +100,22 @@ class ClassroomManagementTests(unittest.TestCase):
         self.sign_in('0@example.edu')
         self.assertEqual(self.client.get('/me').json()['classroom_ids'], [self.other])
 
+    def test_delete_retains_evaluation_and_audit_evidence(self) -> None:
+        self.assertEqual(self.client.request(
+            'DELETE', f'/classrooms/{self.target}', json={'name': 'Target'}
+        ).status_code, 204)
+        with Session(self.database.engine) as db:
+            archive = db.execute(select(models.classroom_archives).where(
+                models.classroom_archives.c.classroom_id == self.target
+            )).mappings().one()
+        self.assertEqual(archive['deleted_by'], 'teacher@example.edu')
+        self.assertGreaterEqual(archive['retain_until'] - archive['deleted_at'], timedelta(days=366))
+        tables = archive['snapshot']['tables']
+        self.assertEqual(len(tables['submission_choices']), 1)
+        self.assertEqual(len(tables['instructor_votes']), 1)
+        self.assertEqual(len(tables['reassignments']), 1)
+        self.assertEqual(tables['classrooms'][0]['name'], 'Target')
+
     def test_failed_delete_rolls_back_prior_deletions(self) -> None:
         before = self.counts()
         with Session(self.database.engine) as db:
@@ -116,3 +133,7 @@ class ClassroomManagementTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     crud.delete_classroom(db, self.target)
         self.assertEqual(self.counts(), before)
+        with Session(self.database.engine) as db:
+            self.assertIsNone(db.execute(select(models.classroom_archives).where(
+                models.classroom_archives.c.classroom_id == self.target
+            )).first())

@@ -25,7 +25,7 @@ def _allocate(
         raise ValueError("Coverage must be positive")
 
     random = Random(seed)
-    work = list(combinations(pair_items, 2)) * coverage
+    work = list(combinations(pair_items, 2))
     random.shuffle(work)
     evaluator_order = list(dict.fromkeys(
         evaluator_id
@@ -41,9 +41,11 @@ def _allocate(
         eligible = [evaluator_id for evaluator_id in evaluator_order if evaluator_id not in excluded]
         if not eligible:
             raise ValueError("No eligible evaluator for a pair")
-        evaluator_id = min(eligible, key=loads.__getitem__)
-        loads[evaluator_id] += 1
-        allocations.append(PairAllocation(kind, left_id, right_id, evaluator_id))
+        for _ in range(min(coverage, len(eligible))):
+            evaluator_id = min(eligible, key=loads.__getitem__)
+            eligible.remove(evaluator_id)
+            loads[evaluator_id] += 1
+            allocations.append(PairAllocation(kind, left_id, right_id, evaluator_id))
 
     return allocations
 

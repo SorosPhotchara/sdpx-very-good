@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Table, Text, UniqueConstraint, and_, func, text
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -12,6 +12,18 @@ class Classroom(Base):
     students = relationship("Student", back_populates="classroom")
     groups = relationship("Group", back_populates="classroom")
     assignments = relationship("Assignment", back_populates="classroom")
+
+
+# Deleted classrooms retain their evidence independently of active records.
+classroom_archives = Table(
+    "classroom_archives", Base.metadata,
+    Column("id", Integer, primary_key=True),
+    Column("classroom_id", Integer, nullable=False, index=True),
+    Column("deleted_at", DateTime(timezone=True), nullable=False),
+    Column("retain_until", DateTime(timezone=True), nullable=False),
+    Column("deleted_by", String, nullable=False),
+    Column("snapshot", JSON, nullable=False),
+)
 
 
 class InstructorApproval(Base):
@@ -96,6 +108,28 @@ class Pair(Base):
 
     assignment = relationship("Assignment", back_populates="pairs")
     criteria = relationship("Criteria")
+
+
+def _active_pair_index(name: str, evaluator: object, left: object, right: object,
+                       pair_type: str, student: bool) -> Index:
+    ordered_left = text(f"(CASE WHEN {left.key} < {right.key} THEN {left.key} ELSE {right.key} END)")
+    ordered_right = text(f"(CASE WHEN {left.key} < {right.key} THEN {right.key} ELSE {left.key} END)")
+    predicate = and_(Pair.superseded_at.is_(None), Pair.pair_type == pair_type,
+                     Pair.assigned_to_student_id.is_not(None) if student
+                     else Pair.assigned_to_instructor_email.is_not(None))
+    return Index(name, Pair.criteria_id, evaluator, ordered_left, ordered_right,
+                 unique=True, postgresql_where=predicate, sqlite_where=predicate)
+
+
+# One active assignment/vote per evaluator and unordered subject pair.
+_active_pair_index("uq_pairs_active_student_group", Pair.assigned_to_student_id,
+                   Pair.left_group_id, Pair.right_group_id, "group", True)
+_active_pair_index("uq_pairs_active_student_individual", Pair.assigned_to_student_id,
+                   Pair.left_id, Pair.right_id, "individual", True)
+_active_pair_index("uq_pairs_active_instructor_group", func.lower(func.trim(Pair.assigned_to_instructor_email)),
+                   Pair.left_group_id, Pair.right_group_id, "group", False)
+_active_pair_index("uq_pairs_active_instructor_individual", func.lower(func.trim(Pair.assigned_to_instructor_email)),
+                   Pair.left_id, Pair.right_id, "individual", False)
 
 
 class DraftChoice(Base):

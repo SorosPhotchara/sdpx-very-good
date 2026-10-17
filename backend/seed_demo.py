@@ -23,8 +23,13 @@ def seed(target_engine: Engine = engine) -> None:
         raise RuntimeError("Set INSTRUCTOR_EMAILS before seeding")
     with Session(target_engine) as db:
         for name in PRESERVED_CLASSROOMS:
-            if db.query(models.Classroom.id).filter_by(name=name).first() is None:
+            existing = db.query(models.Classroom).filter_by(name=name).first()
+            if existing is None:
                 db.add(models.Classroom(name=name, instructor_emails=approved[0]))
+            else:
+                instructors = {email.strip().lower() for email in (existing.instructor_emails or "").split(",") if email.strip()}
+                instructors.add(approved[0])
+                existing.instructor_emails = ",".join(sorted(instructors))
         db.flush()
         classroom = db.query(models.Classroom).filter_by(name=DEMO_CLASSROOM).first()
         if classroom is None:

@@ -6,7 +6,7 @@ from io import StringIO
 from sqlalchemy.orm import Session
 
 from . import models
-from .reports import assignment_report
+from .reports import assignment_report, raw_pair_responses
 from .timezone import as_utc
 
 
@@ -19,8 +19,8 @@ def _safe(value: object) -> object:
 
 
 def sheet_data(db: Session, assignment: models.Assignment, sheet: str) -> tuple[tuple[str, ...], list[dict]]:
-    report = assignment_report(db, assignment)
     if sheet == "groups":
+        report = assignment_report(db, assignment)
         criterion_fields = [(item.id, f"criterion_{item.id}_{item.name}")
                             for item in db.query(models.Criteria).filter_by(assignment_id=assignment.id, is_group=True).order_by(models.Criteria.id)]
         fields = ("group_id", "name", *(field for _, field in criterion_fields), "work_score")
@@ -28,6 +28,7 @@ def sheet_data(db: Session, assignment: models.Assignment, sheet: str) -> tuple[
         rows = [{**group, **{field: lookup.get((criterion_id, group["group_id"]))
                              for criterion_id, field in criterion_fields}} for group in report["groups"]]
     elif sheet == "students":
+        report = assignment_report(db, assignment)
         criterion_fields = [(item.id, f"criterion_{item.id}_{item.name}")
                             for item in db.query(models.Criteria).filter_by(assignment_id=assignment.id, is_group=False).order_by(models.Criteria.id)]
         fields = ("student_id", "email", "group_name", "group_work_score", *(field for _, field in criterion_fields), "individual_work_score",
@@ -37,26 +38,15 @@ def sheet_data(db: Session, assignment: models.Assignment, sheet: str) -> tuple[
                                for criterion_id, field in criterion_fields}} for student in report["students"]]
     elif sheet == "pairs":
         fields = ("section", "criterion", "left_id", "right_id", "evaluator", "choice", "submitted_at")
-        criteria = {item.id: item.name for item in db.query(models.Criteria).filter_by(assignment_id=assignment.id)}
-        pairs = db.query(models.Pair).filter_by(assignment_id=assignment.id, superseded_at=None).order_by(models.Pair.id).all()
-        submissions = db.query(models.Submission).filter_by(assignment_id=assignment.id).order_by(models.Submission.id).all()
-        latest = {(item.student_id, item.section): item for item in submissions}
-        submitted = {choice.pair_id: (choice.choice, item.submitted_at)
-                     for item in latest.values() for choice in item.choices}
-        submitted.update({vote.pair_id: (vote.choice, vote.submitted_at)
-                          for vote in db.query(models.InstructorVote).filter(
-                              models.InstructorVote.pair_id.in_([pair.id for pair in pairs]))})
-        evaluators = {student_id: f"Evaluator {index}"
-                      for index, student_id in enumerate(sorted({pair.assigned_to_student_id for pair in pairs
-                                                                    if pair.assigned_to_student_id is not None}), 1)}
+        raw = raw_pair_responses(db, assignment)
+        evaluators = {student_id: f"Evaluator {index}" for index, student_id in enumerate(
+            sorted({row["evaluator_student_id"] for row in raw if row["evaluator_student_id"] is not None}), 1)}
         rows = [{
-            "section": pair.pair_type, "criterion": criteria[pair.criteria_id],
-            "left_id": pair.left_group_id if pair.pair_type == "group" else pair.left_id,
-            "right_id": pair.right_group_id if pair.pair_type == "group" else pair.right_id,
-            "evaluator": evaluators.get(pair.assigned_to_student_id, "Instructor"),
-            "choice": submitted[pair.id][0] if pair.id in submitted else None,
-            "submitted_at": submitted[pair.id][1] if pair.id in submitted else None,
-        } for pair in pairs]
+            "section": row["section"], "criterion": row["criterion"],
+            "left_id": row["left_id"], "right_id": row["right_id"],
+            "evaluator": evaluators.get(row["evaluator_student_id"], "Instructor"),
+            "choice": row["choice"], "submitted_at": row["submitted_at"],
+        } for row in raw]
     else:
         raise ValueError("Unknown report sheet")
     return fields, rows

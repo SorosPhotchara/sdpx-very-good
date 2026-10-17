@@ -51,14 +51,14 @@ export function ClassroomSettings({ classroom, onRename, onDelete }: {
       <AlertDialogContent data-testid="delete-classroom-dialog">
         <AlertDialogHeader>
           <AlertDialogTitle>{text('ลบห้องเรียน', 'Delete classroom')}: {classroom.name}</AlertDialogTitle>
-          <AlertDialogDescription>{text('รายชื่อนักศึกษา กลุ่ม งานประเมิน คำตอบ คะแนน และประวัติในห้องนี้จะถูกลบถาวร กู้คืนไม่ได้ ห้องอื่นไม่ได้รับผลกระทบ', 'This permanently deletes this classroom’s roster, groups, assignments, answers, scores and history. It cannot be undone. Other classrooms are unaffected.')}</AlertDialogDescription>
+          <AlertDialogDescription>{text('ห้องนี้จะถูกนำออกและกู้คืนไม่ได้ ข้อมูลการประเมินและประวัติจะเก็บไว้เพื่อตรวจสอบอย่างน้อยหนึ่งปีการศึกษา ห้องอื่นไม่ได้รับผลกระทบ', 'This classroom is removed and cannot be restored. Evaluation and audit records are retained for at least one academic year. Other classrooms are unaffected.')}</AlertDialogDescription>
         </AlertDialogHeader>
         <Label htmlFor="confirm-classroom-name">{text('พิมพ์ชื่อห้องเพื่อยืนยัน', 'Type classroom name to confirm')}</Label>
         <Input id="confirm-classroom-name" data-testid="confirm-classroom-name" value={confirmation} disabled={action.busy} onChange={event => setConfirmation(event.target.value)} autoComplete="off" />
         <ToastNotice notice={deleteError} assertive />
         <AlertDialogFooter>
           <AlertDialogCancel disabled={action.busy}>{text('ยกเลิก', 'Cancel')}</AlertDialogCancel>
-          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" data-testid="confirm-delete-classroom" disabled={action.busy || confirmation.trim() !== classroom.name} aria-busy={action.busy} onClick={event => { event.preventDefault(); void remove() }}>{text(action.busy ? 'กำลังดำเนินการ...' : 'ลบห้องถาวร', action.busy ? 'Working...' : 'Permanently delete classroom')}</AlertDialogAction>
+          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" data-testid="confirm-delete-classroom" disabled={action.busy || confirmation.trim() !== classroom.name} aria-busy={action.busy} onClick={event => { event.preventDefault(); void remove() }}>{text(action.busy ? 'กำลังดำเนินการ...' : 'ลบห้องเรียน', action.busy ? 'Working...' : 'Delete classroom')}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

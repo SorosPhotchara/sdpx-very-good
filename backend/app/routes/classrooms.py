@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from .. import crud, models, schemas
 from ..auth import Identity, approved_instructors, current_identity
 from ..dependencies import get_db, instructor_emails, require_owner, validate_page
-from ..reassignment import reassign
+from ..reassignment import preview_reassignment, reassign
 from ..roster import import_roster
 from ..timezone import as_utc
 
@@ -80,7 +80,7 @@ def delete_classroom(
     require_owner(classroom_id, identity, db)
     if payload.name != classroom.name:
         raise HTTPException(409, "Classroom name changed or confirmation does not match. Refresh and try again.")
-    crud.delete_classroom(db, classroom_id)
+    crud.delete_classroom(db, classroom_id, deleted_by=identity.email)
     return Response(status_code=204)
 
 
@@ -91,8 +91,8 @@ def invite_instructor(
 ) -> models.Classroom:
     classroom = require_owner(classroom_id, identity, db)
     email = str(payload.email).strip().lower()
-    if email not in approved_instructors(db):
-        raise HTTPException(422, "Ask an administrator to approve this instructor first")
+    if email not in approved_instructors():
+        raise HTTPException(422, "Instructor email must be in INSTRUCTOR_EMAILS")
     emails = instructor_emails(classroom)
     emails.add(email)
     classroom.instructor_emails = ",".join(sorted(emails))
@@ -128,6 +128,10 @@ def import_classroom_roster(
     db: Session = Depends(get_db),
 ) -> schemas.RosterImportResponse:
     require_owner(classroom_id, identity, db)
+    if db.query(models.Assignment.id).filter_by(classroom_id=classroom_id).filter(
+        models.Assignment.published_at.is_not(None)
+    ).first():
+        raise HTTPException(409, "Cannot import students after an assignment is published")
     result = import_roster(db, classroom_id, payload.csv_text)
     return schemas.RosterImportResponse(imported=len(result.rows), errors=result.errors)
 
@@ -184,6 +188,18 @@ def read_groups(
     require_owner(classroom_id, identity, db)
     validate_page(skip, limit)
     return db.query(models.Group).filter_by(classroom_id=classroom_id).offset(skip).limit(limit).all()
+
+
+@router.get("/classrooms/{classroom_id}/students/{student_id}/group/preview")
+def preview_student_group_reassignment(
+    classroom_id: int, student_id: int, group_id: int,
+    identity: Identity = Depends(current_identity), db: Session = Depends(get_db),
+) -> dict:
+    require_owner(classroom_id, identity, db)
+    try:
+        return preview_reassignment(db, classroom_id, student_id, group_id)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
 
 
 @router.put("/classrooms/{classroom_id}/students/{student_id}/group")

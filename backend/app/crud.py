@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -20,12 +22,41 @@ def create_classroom(db: Session, classroom: schemas.ClassroomCreate):
     db.refresh(db_classroom)
     return db_classroom
 
-def delete_classroom(db: Session, classroom_id: int) -> None:
-    """Remove dependent records in FK order, within one transaction."""
+def _archive_value(value: object) -> object:
+    return value.isoformat() if isinstance(value, datetime) else value
+
+
+def _snapshot_rows(db: Session, model: type, condition: object) -> list[dict]:
+    rows = db.scalars(select(model).where(condition)).all()
+    return [
+        {
+            column.name: _archive_value(getattr(row, column.name))
+            for column in model.__table__.columns
+        }
+        for row in rows
+    ]
+
+
+def delete_classroom(db: Session, classroom_id: int, deleted_by: str = "system") -> None:
+    """Archive evidence, then remove active records in one transaction."""
     students = select(models.Student.id).where(models.Student.classroom_id == classroom_id)
     assignments = select(models.Assignment.id).where(models.Assignment.classroom_id == classroom_id)
     pairs = select(models.Pair.id).where(models.Pair.assignment_id.in_(assignments))
     submissions = select(models.Submission.id).where(models.Submission.assignment_id.in_(assignments))
+    archived = [
+        (models.Classroom, models.Classroom.id == classroom_id),
+        (models.Group, models.Group.classroom_id == classroom_id),
+        (models.Student, models.Student.classroom_id == classroom_id),
+        (models.Assignment, models.Assignment.classroom_id == classroom_id),
+        (models.Criteria, models.Criteria.assignment_id.in_(assignments)),
+        (models.Pair, models.Pair.assignment_id.in_(assignments)),
+        (models.DraftChoice, models.DraftChoice.pair_id.in_(pairs)),
+        (models.Submission, models.Submission.assignment_id.in_(assignments)),
+        (models.SubmissionChoice, models.SubmissionChoice.submission_id.in_(submissions)),
+        (models.InstructorVote, models.InstructorVote.pair_id.in_(pairs)),
+        (models.Reassignment, models.Reassignment.classroom_id == classroom_id),
+        (models.Notification, models.Notification.student_id.in_(students)),
+    ]
     deletions = [
         (models.Notification, models.Notification.student_id.in_(students)),
         (models.Reassignment, models.Reassignment.classroom_id == classroom_id),
@@ -41,6 +72,17 @@ def delete_classroom(db: Session, classroom_id: int) -> None:
         (models.Classroom, models.Classroom.id == classroom_id),
     ]
     try:
+        deleted_at = datetime.now(UTC)
+        db.execute(models.classroom_archives.insert().values(
+            classroom_id=classroom_id,
+            deleted_at=deleted_at,
+            retain_until=deleted_at + timedelta(days=366),
+            deleted_by=deleted_by,
+            snapshot={"version": 1, "tables": {
+                model.__tablename__: _snapshot_rows(db, model, condition)
+                for model, condition in archived
+            }},
+        ))
         for model, condition in deletions:
             db.execute(delete(model).where(condition), execution_options={"synchronize_session": False})
         db.commit()

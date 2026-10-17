@@ -50,11 +50,13 @@
 
 ## 5. Pairing Engine
 
-- [ ] Group pairs ครอบคลุมทุก combination ที่ถูกต้องอย่างน้อย 5 evaluations ต่อ criterion
+- [ ] Group pairs ครอบคลุมทุก combination ที่ถูกต้องต่อ criterion: ถ้ามี Student ผู้ประเมินที่เข้าเกณฑ์ไม่ซ้ำกันอย่างน้อย 5 คน ต้องมอบหมายอย่างน้อย 5 คนเมื่อ Publish; ถ้ามีน้อยกว่า 5 คน ให้มอบหมายครบทุกคนที่เข้าเกณฑ์ (`target_evaluations = min(5, eligible_evaluators)`) และแสดงจำนวนที่ขาดจาก 5 โดยแยกจำนวนคำตอบที่ Submit จริงออกจากจำนวนที่มอบหมาย
 - [ ] ผู้ประเมินไม่ได้รับ pair ที่มีกลุ่มของตนเอง
 - [ ] Individual pairs มีเฉพาะสมาชิกภายในกลุ่มเดียวกัน
 - [ ] ผู้ประเมิน Individual ไม่พบตนเองอยู่ใน pair
-- [ ] ระบบให้ความสำคัญกับ coverage ครบ 5 ครั้งก่อน แล้วจึงกระจายจำนวนงานให้ใกล้เคียงกัน
+- [ ] Individual pairs ใช้กติกาเดียวกัน: Student หนึ่งคนมีคู่/criterion เดิมที่ยังมีผลได้ไม่เกินหนึ่งรายการ และเป้าหมาย coverage คือ `min(5, จำนวน Student ผู้ประเมินที่เข้าเกณฑ์และไม่ซ้ำกัน)`; คู่ที่ supersede แล้วเก็บไว้เพื่อ audit แต่ไม่นับซ้ำ
+- [ ] Publish ได้เมื่อผ่านเงื่อนไข Classroom และ Assignment แม้คู่ใดมีผู้ประเมินที่เข้าเกณฑ์ไม่ถึง 5 คน; ระบบแสดงจำนวนที่ทำได้จริงและจำนวนที่ขาดจากเป้าหมาย 5 คน โดยไม่สร้างคำตอบซ้ำจากคนเดิมเพื่อให้ครบ 5
+- [ ] ระบบให้ความสำคัญกับ coverage ตามเป้าหมายที่ทำได้จริงก่อน แล้วจึงกระจายจำนวนงานให้ใกล้เคียงกัน
 - [ ] Pairing ให้ผลที่ทำซ้ำได้เมื่อกำหนด seed เดียวกันสำหรับการทดสอบ
 - [ ] รองรับ Classroom ขนาด 200 คน 10 กลุ่มโดยไม่สร้าง pair ที่ละเมิดข้อกำหนด
 - [ ] Instructor ส่ง pair เพิ่มให้ evaluator เพิ่มเติมได้โดยไม่มอบ pair ที่ขัดกับข้อจำกัด
@@ -99,6 +101,7 @@
 
 - [ ] Instructor ดู Group Summary และ Individual Summary ของ Assignment ได้
 - [ ] Pair Coverage Report แสดงทุก pair, จำนวน evaluation และผลแยกตาม criterion
+- [ ] Coverage รายคู่/criterion แยก `eligible_evaluators`, `target_evaluations`, `assigned_evaluators`, `votes` (Student ที่ Submit ไม่ซ้ำกัน), `missing_to_target` และ `shortage_to_five`; แสดง `instructor_votes` (จำนวนคำตอบของ Instructor), `effective_votes` (ผลรวมเสียงหลังถ่วง `instructor_weight`) และ `left_points`/`right_points` (ผลรวมคะแนน pairwise หลังถ่วงน้ำหนัก) แยกจาก Student `votes`; Instructor votes ไม่ใช้เติม Student coverage
 - [ ] Report แสดง effective vote count ที่รวม Instructor weight
 - [ ] Instructor ตรวจ raw pair และ evaluator ได้ แต่นักศึกษาเข้าถึงข้อมูลนี้ไม่ได้
 - [ ] Export CSV เลือกประเภท Group Summary, Individual Summary หรือ Raw Pairs ได้
