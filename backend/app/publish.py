@@ -1,5 +1,6 @@
 """Build and persist pair assignments for an instructor assignment."""
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from math import isclose
@@ -45,15 +46,24 @@ def build_plan(db: Session, assignment_id: int) -> list[PlannedPair]:
             raise ValueError("Criterion weights must total 100 percent in each scored section")
 
     plan: list[PlannedPair] = []
+    group_loads: Counter[int] = Counter()
+    individual_loads: Counter[int] = Counter()
     for criterion in criteria:
         if criterion.is_group:
-            allocations = allocate_group_pairs(active, seed=criterion.id)
+            allocations = allocate_group_pairs(
+                active, seed=criterion.id, initial_loads=group_loads,
+            )
+            group_loads.update(item.evaluator_id for item in allocations)
         else:
-            allocations = [
-                allocation
-                for group_id, members in active.items()
-                for allocation in allocate_individual_pairs(members, seed=criterion.id * 1_000_003 + group_id)
-            ]
+            allocations = []
+            for group_id, members in active.items():
+                group_allocations = allocate_individual_pairs(
+                    members,
+                    seed=criterion.id * 1_000_003 + group_id,
+                    initial_loads=individual_loads,
+                )
+                allocations.extend(group_allocations)
+                individual_loads.update(item.evaluator_id for item in group_allocations)
         plan.extend(PlannedPair(criterion.id, allocation) for allocation in allocations)
     return plan
 

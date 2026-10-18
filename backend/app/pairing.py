@@ -20,6 +20,7 @@ def _allocate(
     evaluators: Mapping[int, Sequence[int]],
     coverage: int,
     seed: int | None,
+    initial_loads: Mapping[int, int] | None = None,
 ) -> list[PairAllocation]:
     if coverage < 1:
         raise ValueError("Coverage must be positive")
@@ -33,7 +34,10 @@ def _allocate(
         for evaluator_id in item_evaluators
     ))
     random.shuffle(evaluator_order)
-    loads = {evaluator_id: 0 for evaluator_id in evaluator_order}
+    loads = {
+        evaluator_id: (initial_loads or {}).get(evaluator_id, 0)
+        for evaluator_id in evaluator_order
+    }
     allocations: list[PairAllocation] = []
 
     for left_id, right_id in work:
@@ -51,7 +55,8 @@ def _allocate(
 
 
 def allocate_group_pairs(
-    groups: Mapping[int, Sequence[int]], coverage: int = 5, seed: int | None = None
+    groups: Mapping[int, Sequence[int]], coverage: int = 5, seed: int | None = None,
+    initial_loads: Mapping[int, int] | None = None,
 ) -> list[PairAllocation]:
     active = {group_id: members for group_id, members in groups.items() if members}
     if len(active) < 3:
@@ -59,14 +64,18 @@ def allocate_group_pairs(
     members = [student_id for group_members in active.values() for student_id in group_members]
     if len(members) != len(set(members)):
         raise ValueError("A student cannot belong to multiple groups in one classroom")
-    return _allocate("group", list(active), active, coverage, seed)
+    return _allocate("group", list(active), active, coverage, seed, initial_loads)
 
 
 def allocate_individual_pairs(
-    members: Sequence[int], coverage: int = 5, seed: int | None = None
+    members: Sequence[int], coverage: int = 5, seed: int | None = None,
+    initial_loads: Mapping[int, int] | None = None,
 ) -> list[PairAllocation]:
     if len(members) != len(set(members)):
         raise ValueError("Group members must be distinct")
     if len(members) < 3:
         return []
-    return _allocate("individual", members, {member: members for member in members}, coverage, seed)
+    return _allocate(
+        "individual", members, {member: members for member in members},
+        coverage, seed, initial_loads,
+    )

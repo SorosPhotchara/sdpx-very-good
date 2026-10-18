@@ -1,4 +1,5 @@
 import unittest
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -68,3 +69,42 @@ class PublishTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "100 percent"):
             publish(self.db, self.assignment.id)
         self.assertEqual(self.db.query(models.Pair).count(), 0)
+
+    def test_group_workload_stays_balanced_across_criteria(self) -> None:
+        groups = self.db.query(models.Group).order_by(models.Group.id).all()
+        for group, target_size in zip(groups, (8, 9, 8), strict=True):
+            for student_number in range(3, target_size):
+                self.db.add(models.Student(
+                    email=f"extra-{group.id}-{student_number}@example.edu",
+                    classroom_id=group.classroom_id,
+                    group_id=group.id,
+                ))
+
+        self.db.delete(self.group_criterion)
+        self.db.delete(self.individual_criterion)
+        self.assignment.individual_score = 0
+        self.assignment.individual_deadline = None
+        self.db.flush()
+        self.db.add_all([
+            models.Criteria(
+                id=10, assignment_id=self.assignment.id,
+                name="Quality", weight=50, is_group=True,
+            ),
+            models.Criteria(
+                id=11, assignment_id=self.assignment.id,
+                name="Completeness", weight=50, is_group=True,
+            ),
+        ])
+        self.db.commit()
+
+        plan = build_plan(self.db, self.assignment.id)
+        loads = Counter(
+            item.allocation.evaluator_id
+            for item in plan
+            if item.allocation.kind == "group"
+        )
+
+        for group in groups:
+            group_loads = [loads[student.id] for student in group.students]
+            self.assertGreaterEqual(min(group_loads), 1)
+            self.assertLessEqual(max(group_loads) - min(group_loads), 1)
