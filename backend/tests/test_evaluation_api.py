@@ -327,3 +327,37 @@ class EvaluationApiTests(unittest.TestCase):
             self.assertTrue(page.json()["is_open"], email)
             self.assertTrue(page.json()["pairs"], email)
 
+    def test_reassignment_gives_work_back_to_a_student_left_without_pairs(self) -> None:
+        with Session(self.engine) as db:
+            mover = db.query(models.Student).filter_by(email="a0@example.edu").first()
+            target = db.query(models.Group).filter_by(name="B").first()
+            starved = db.query(models.Student).filter(
+                models.Student.classroom_id == self.classroom_id,
+                models.Student.id != mover.id,
+            ).order_by(models.Student.id).first()
+            # Drift this member into an empty section the way an earlier move would:
+            # every assignment of theirs is superseded and nothing replaced it.
+            for pair in db.query(models.Pair).filter_by(
+                assigned_to_student_id=starved.id, superseded_at=None,
+            ):
+                pair.superseded_at = datetime.now(UTC)
+            db.commit()
+            mover_id, target_id, starved_id = mover.id, target.id, starved.id
+            self.assertEqual(db.query(models.Pair).filter_by(
+                assigned_to_student_id=starved_id, superseded_at=None,
+            ).count(), 0)
+
+        self.sign_in("teacher@example.edu", True)
+        path = f"/classrooms/{self.classroom_id}/students/{mover_id}/group"
+        preview = self.client.get(path + "/preview", params={"group_id": target_id})
+        self.assertEqual(preview.status_code, 200)
+        moved = self.client.put(path, json={"group_id": target_id})
+        self.assertEqual(moved.status_code, 200)
+        for key in ("changed_pairs", "new_pairs", "superseded_pairs", "affected_submissions"):
+            self.assertEqual(moved.json()[key], preview.json()[key], key)
+
+        with Session(self.engine) as db:
+            self.assertGreaterEqual(db.query(models.Pair).filter_by(
+                assigned_to_student_id=starved_id, superseded_at=None,
+            ).count(), 1)
+            self.assertTrue(db.query(models.Notification).filter_by(student_id=starved_id).first())

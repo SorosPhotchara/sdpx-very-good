@@ -124,6 +124,33 @@ def _effects_after_move(db: Session, assignments: list[models.Assignment],
             evaluators.add(allocation.evaluator_id)
             affected.add(allocation.evaluator_id)
 
+        # Filling every pair up to its target can still leave a student whose own pairs
+        # were all superseded with an empty section, so hand those evaluators a pair the
+        # post-move plan already considers legal for them.
+        planned_by_evaluator: dict[tuple[int, int], list[PlannedPair]] = {}
+        for planned in plan:
+            planned_by_evaluator.setdefault(
+                (planned.criterion_id, planned.allocation.evaluator_id), []
+            ).append(planned)
+        covered = {
+            (criterion_id, evaluator_id)
+            for (criterion_id, *_), evaluators in valid_student_evaluators.items()
+            for evaluator_id in evaluators
+        }
+        for (criterion_id, evaluator_id), options in planned_by_evaluator.items():
+            if (criterion_id, evaluator_id) in covered:
+                continue
+            for planned in options:
+                allocation = planned.allocation
+                key = (criterion_id, *sorted((allocation.left_id, allocation.right_id)))
+                evaluators = valid_student_evaluators.setdefault(key, set())
+                if evaluator_id in evaluators:
+                    continue
+                added.append(planned)
+                evaluators.add(evaluator_id)
+                affected.add(evaluator_id)
+                break
+
     invalid_ids = [pair.id for pair in removed]
     affected_submissions = 0
     if invalid_ids:
