@@ -22,7 +22,7 @@ Date: 21-7-2026
 
 ## Deployment
 - Platform: Vercel
-- Staging URL: [จะเพิ่มหลัง deploy]
+- Staging URL: [https://sdpx-very-good.vercel.app/]
 
 ## AI Tools
 - Code generation: GitHub Copilot / Claude / cursor / copilot

@@ -10,7 +10,7 @@ const draftLatency = new Trend('draft_latency', true);
 export const options = {
   stages: [
     { duration: '30s', target: 5 },
-    { duration: '1m', target: 10 },
+    { duration: '30s', target: 10 },
     { duration: '30s', target: 0 },
   ],
   thresholds: {
@@ -54,3 +54,4 @@ export default function () {
     }
   });
 }
+
