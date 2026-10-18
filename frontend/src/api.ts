@@ -26,7 +26,7 @@ export type PairPreviewItem = { section: 'group' | 'individual'; criterion: stri
 export type PairPreview = { pair_assignments: number; pairs: PairPreviewItem[] }
 export type Criterion = { id: number; assignment_id: number; name: string; weight: number; is_group: boolean }
 export type Group = { id: number; name: string; classroom_id: number }
-export type Student = { id: number; email: string; group_name: string | null; group_id: number | null; classroom_id: number }
+export type Student = { id: number; email: string; display_name: string | null; group_name: string | null; group_id: number | null; classroom_id: number; activated_at: string | null }
 export type InstructorPair = { pair_id: number; section: string; criterion: string; left: string; right: string; choice: number | null; is_open: boolean }
 export type EvaluationPair = {
   id: number; criterion: string; left: string; right: string
@@ -199,6 +199,14 @@ export async function getGroups(classroomId: number): Promise<Group[]> {
 export async function getStudents(classroomId: number): Promise<Student[]> {
   const response = await fetch(`${API_BASE}/students/?classroom_id=${classroomId}&limit=500`, { headers: authHeaders() })
   return readJson<Student[]>(response)
+}
+
+export async function removeStudent(classroomId: number, studentId: number, email: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/classrooms/${classroomId}/students/${studentId}`, {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ email }),
+  })
+  if (!response.ok) await readJson(response)
 }
 
 export async function reassignStudent(classroomId: number, studentId: number, groupId: number): Promise<{ changed_pairs: number; notified_students: number }> {
