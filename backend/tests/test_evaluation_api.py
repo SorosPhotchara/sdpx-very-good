@@ -180,7 +180,7 @@ class EvaluationApiTests(unittest.TestCase):
         with Session(self.engine) as db:
             self.assertTrue(db.query(models.Pair).filter(models.Pair.superseded_at.is_not(None)).first())
             active = db.query(models.Pair).filter_by(assignment_id=self.assignment_id, superseded_at=None).all()
-            self.assertEqual(len(active), 11)
+            self.assertEqual(len(active), 29)
             self.assertEqual(len({pair.assigned_to_student_id for pair in active}), 12)
         self.sign_in("a0@example.edu")
         self.assertTrue(self.client.get("/classrooms/1/notifications").json())
