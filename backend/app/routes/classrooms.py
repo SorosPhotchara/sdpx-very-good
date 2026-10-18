@@ -7,7 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .. import crud, models, schemas
 from ..auth import Identity, approved_instructors, current_identity
-from ..dependencies import get_db, instructor_emails, require_owner, validate_page
+from ..dependencies import (classroom_has_evaluation, get_db, instructor_emails, require_owner,
+                            validate_page)
 from ..reassignment import preview_reassignment, reassign
 from ..roster import import_roster
 from ..timezone import as_utc
@@ -165,6 +166,25 @@ def read_students(
     require_owner(classroom_id, identity, db)
     validate_page(skip, limit)
     return db.query(models.Student).filter_by(classroom_id=classroom_id).offset(skip).limit(limit).all()
+
+
+@router.delete("/classrooms/{classroom_id}/students/{student_id}", status_code=204)
+def remove_student(
+    classroom_id: int, student_id: int, payload: schemas.StudentRemoval,
+    identity: Identity = Depends(current_identity), db: Session = Depends(get_db),
+) -> Response:
+    classroom = require_owner(classroom_id, identity, db)
+    student = db.get(models.Student, student_id)
+    if student is None or student.classroom_id != classroom_id:
+        raise HTTPException(404, "Student not found in classroom")
+    db.refresh(classroom, with_for_update=True)
+    require_owner(classroom_id, identity, db)
+    if classroom_has_evaluation(db, classroom_id):
+        raise HTTPException(409, "Cannot remove a student after an evaluation exists")
+    if payload.email != (student.email or "").strip().lower():
+        raise HTTPException(409, "Student roster changed or confirmation does not match. Refresh and try again.")
+    crud.delete_student(db, student_id)
+    return Response(status_code=204)
 
 
 @router.post("/groups/", response_model=schemas.Group)

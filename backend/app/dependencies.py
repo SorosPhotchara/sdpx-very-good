@@ -1,6 +1,7 @@
 """Shared API dependencies and access checks."""
 
 from fastapi import HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from . import models
 from .auth import Identity
@@ -15,6 +16,20 @@ def require_owner(classroom_id: int, identity: Identity, db: Session) -> models.
     if not identity.is_instructor or identity.email not in owners:
         raise HTTPException(status_code=403, detail="Instructor access required")
     return classroom
+
+
+def classroom_has_evaluation(db: Session, classroom_id: int) -> bool:
+    """True once any assignment in the classroom is published or owns a pair.
+
+    Instructor-assigned pairs reach the table without setting ``published_at``, so
+    both halves matter before anything that would orphan a pair is allowed.
+    """
+    return db.query(models.Assignment.id).outerjoin(
+        models.Pair, models.Pair.assignment_id == models.Assignment.id
+    ).filter(
+        models.Assignment.classroom_id == classroom_id,
+        or_(models.Assignment.published_at.is_not(None), models.Pair.id.is_not(None)),
+    ).first() is not None
 
 
 def instructor_emails(classroom: models.Classroom) -> set[str]:

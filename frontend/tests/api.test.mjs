@@ -125,3 +125,24 @@ test("report download uses the UTF-8 filename supplied by the authorized API", a
     URL.revokeObjectURL = originalRevokeObjectURL
   }
 })
+
+test("removing a student sends the typed email confirmation and surfaces refusals", async () => {
+  api.setCredential("test-id-token")
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, "http://localhost:8000/classrooms/7/students/3")
+    assert.equal(options.method, "DELETE")
+    assert.equal(options.headers.Authorization, "Bearer test-id-token")
+    assert.deepEqual(JSON.parse(options.body), { email: "student@example.edu" })
+    return new Response(null, { status: 204 })
+  }
+  assert.equal(await api.removeStudent(7, 3, "student@example.edu"), undefined)
+
+  globalThis.fetch = async () => new Response(
+    JSON.stringify({ detail: "Cannot remove a student after an evaluation exists" }),
+    { status: 409 },
+  )
+  await assert.rejects(
+    api.removeStudent(7, 3, "student@example.edu"),
+    /Cannot remove a student after an evaluation exists/,
+  )
+})

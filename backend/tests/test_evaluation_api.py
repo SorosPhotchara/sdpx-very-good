@@ -24,9 +24,12 @@ class EvaluationApiTests(unittest.TestCase):
         self.sign_in("teacher@example.edu", True)
         classroom_id = self.client.post("/classrooms/", json={"name": "Course"}).json()["id"]
         self.classroom_id = classroom_id
+        # Four groups keep one eligible evaluator spare for the A-B pair once every
+        # eligible student is guaranteed work, which the extra-pair tests rely on.
+        sizes = {"A": 3, "B": 3, "C": 4, "D": 2}
         roster = "email,groupname\n" + "\n".join(
             f"{group}{index}@example.edu,{group}"
-            for group in "ABC" for index in range(6 if group == "C" else 3)
+            for group, size in sizes.items() for index in range(size)
         )
         self.assertEqual(self.client.post(f"/classrooms/{classroom_id}/roster/import", json={"csv_text": roster}).json()["imported"], 12)
         self.assignment_id = self.client.post(f"/classrooms/{classroom_id}/assignments", json={
@@ -176,7 +179,9 @@ class EvaluationApiTests(unittest.TestCase):
         self.assertTrue(all(item["votes"] == 0 for item in report["coverage"]))
         with Session(self.engine) as db:
             self.assertTrue(db.query(models.Pair).filter(models.Pair.superseded_at.is_not(None)).first())
-            self.assertEqual(db.query(models.Pair).filter_by(assignment_id=self.assignment_id, superseded_at=None).count(), 11)
+            active = db.query(models.Pair).filter_by(assignment_id=self.assignment_id, superseded_at=None).all()
+            self.assertEqual(len(active), 11)
+            self.assertEqual(len({pair.assigned_to_student_id for pair in active}), 12)
         self.sign_in("a0@example.edu")
         self.assertTrue(self.client.get("/classrooms/1/notifications").json())
         self.assertEqual(self.client.put(path, json={"group_id": target_id}).status_code, 403)
@@ -191,8 +196,8 @@ class EvaluationApiTests(unittest.TestCase):
                 for pair in db.query(models.Pair).filter_by(criteria_id=criterion_id, superseded_at=None)
                 if {pair.left_group_id, pair.right_group_id} == {groups["A"], groups["B"]}
             }
-            extra_student = next(student for student in db.query(models.Student).filter_by(group_id=groups["C"])
-                                 if student.id not in assigned)
+            extra_student = next(student for student in db.query(models.Student).filter_by(classroom_id=self.classroom_id)
+                                 if student.group_id not in (groups["A"], groups["B"]) and student.id not in assigned)
         payload = {"criteria_id": criterion_id, "left_id": groups["A"], "right_id": groups["B"],
                    "student_id": extra_student.id}
         path = f"/assignments/{self.assignment_id}/student-pairs"
@@ -308,3 +313,51 @@ class EvaluationApiTests(unittest.TestCase):
         with Session(self.engine) as db:
             self.assertIsNotNone(db.get(models.Pair, affected_pair_id).superseded_at)
             self.assertIsNone(db.get(models.Pair, extra_id).superseded_at)
+
+    def test_every_student_can_open_the_group_section(self) -> None:
+        self.sign_in("teacher@example.edu", True)
+        roster = self.client.get("/students/", params={"classroom_id": self.classroom_id, "limit": 500})
+        emails = [student["email"] for student in roster.json()]
+
+        self.assertEqual(len(emails), 12)
+        for email in emails:
+            self.sign_in(email)
+            page = self.client.get(self.path)
+            self.assertEqual(page.status_code, 200, email)
+            self.assertTrue(page.json()["is_open"], email)
+            self.assertTrue(page.json()["pairs"], email)
+
+    def test_reassignment_gives_work_back_to_a_student_left_without_pairs(self) -> None:
+        with Session(self.engine) as db:
+            mover = db.query(models.Student).filter_by(email="a0@example.edu").first()
+            target = db.query(models.Group).filter_by(name="B").first()
+            starved = db.query(models.Student).filter(
+                models.Student.classroom_id == self.classroom_id,
+                models.Student.id != mover.id,
+            ).order_by(models.Student.id).first()
+            # Drift this member into an empty section the way an earlier move would:
+            # every assignment of theirs is superseded and nothing replaced it.
+            for pair in db.query(models.Pair).filter_by(
+                assigned_to_student_id=starved.id, superseded_at=None,
+            ):
+                pair.superseded_at = datetime.now(UTC)
+            db.commit()
+            mover_id, target_id, starved_id = mover.id, target.id, starved.id
+            self.assertEqual(db.query(models.Pair).filter_by(
+                assigned_to_student_id=starved_id, superseded_at=None,
+            ).count(), 0)
+
+        self.sign_in("teacher@example.edu", True)
+        path = f"/classrooms/{self.classroom_id}/students/{mover_id}/group"
+        preview = self.client.get(path + "/preview", params={"group_id": target_id})
+        self.assertEqual(preview.status_code, 200)
+        moved = self.client.put(path, json={"group_id": target_id})
+        self.assertEqual(moved.status_code, 200)
+        for key in ("changed_pairs", "new_pairs", "superseded_pairs", "affected_submissions"):
+            self.assertEqual(moved.json()[key], preview.json()[key], key)
+
+        with Session(self.engine) as db:
+            self.assertGreaterEqual(db.query(models.Pair).filter_by(
+                assigned_to_student_id=starved_id, superseded_at=None,
+            ).count(), 1)
+            self.assertTrue(db.query(models.Notification).filter_by(student_id=starved_id).first())

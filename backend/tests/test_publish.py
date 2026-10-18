@@ -108,3 +108,47 @@ class PublishTests(unittest.TestCase):
             group_loads = [loads[student.id] for student in group.students]
             self.assertGreaterEqual(min(group_loads), 1)
             self.assertLessEqual(max(group_loads) - min(group_loads), 1)
+
+    def test_every_student_evaluates_in_every_group_criterion(self) -> None:
+        groups = self.db.query(models.Group).order_by(models.Group.id).all()
+        for group in groups:
+            for student_number in range(3, 10):
+                self.db.add(models.Student(
+                    email=f"extra-{group.id}-{student_number}@example.edu",
+                    classroom_id=group.classroom_id,
+                    group_id=group.id,
+                ))
+
+        self.db.delete(self.group_criterion)
+        self.db.delete(self.individual_criterion)
+        self.assignment.individual_score = 0
+        self.assignment.individual_deadline = None
+        self.db.flush()
+        self.db.add_all([
+            models.Criteria(
+                id=10, assignment_id=self.assignment.id,
+                name="Quality", weight=50, is_group=True,
+            ),
+            models.Criteria(
+                id=11, assignment_id=self.assignment.id,
+                name="Completeness", weight=50, is_group=True,
+            ),
+        ])
+        self.db.commit()
+
+        plan = build_plan(self.db, self.assignment.id)
+        per_criterion: dict[int, Counter[int]] = {}
+        for item in plan:
+            per_criterion.setdefault(item.criterion_id, Counter())[item.allocation.evaluator_id] += 1
+
+        # Thirty students across three groups leave only fifteen coverage slots per
+        # criterion, so the floor is what keeps anyone from opening an empty section.
+        self.assertEqual(len(per_criterion), 2)
+        for counts in per_criterion.values():
+            self.assertEqual(len(counts), 30)
+            self.assertEqual(set(counts.values()), {1})
+        self.assertEqual(publish(self.db, self.assignment.id), len(plan))
+        pairs = self.db.query(models.Pair).filter_by(superseded_at=None).all()
+        self.assertEqual(len({
+            (pair.criteria_id, pair.assigned_to_student_id) for pair in pairs
+        }), 60)
