@@ -63,3 +63,44 @@ class PairingTests(unittest.TestCase):
         self.assertEqual(len(allocations), 45 * 5)
         self.assertEqual(len(coverage), 45)
         self.assertEqual(set(coverage.values()), {5})
+
+    def test_every_eligible_evaluator_is_used_when_students_outnumber_slots(self) -> None:
+        groups = {10: list(range(1, 11)), 20: list(range(11, 21)), 30: list(range(21, 31))}
+        allocations = allocate_group_pairs(groups, seed=5)
+        loads = Counter(item.evaluator_id for item in allocations)
+        coverage = Counter((item.left_id, item.right_id) for item in allocations)
+
+        self.assertEqual(len(allocations), 30)
+        self.assertEqual(sorted(loads), list(range(1, 31)))
+        self.assertEqual(set(loads.values()), {1})
+        self.assertEqual(set(coverage.values()), {10})
+        self.assertEqual(len(allocations), len({
+            (item.left_id, item.right_id, item.evaluator_id) for item in allocations
+        }))
+        self.assertEqual(allocations, allocate_group_pairs(groups, seed=5))
+
+    def test_each_criterion_covers_every_evaluator_while_totals_stay_balanced(self) -> None:
+        groups = {10: list(range(1, 11)), 20: list(range(11, 21)), 30: list(range(21, 31))}
+        cumulative: Counter[int] = Counter()
+
+        for seed in (10, 11, 12):
+            allocations = allocate_group_pairs(groups, seed=seed, initial_loads=cumulative)
+            self.assertEqual(set(Counter(item.evaluator_id for item in allocations).values()), {1})
+            cumulative.update(item.evaluator_id for item in allocations)
+
+        self.assertEqual(set(cumulative.values()), {3})
+
+    def test_individual_floor_overrides_cumulative_imbalance(self) -> None:
+        members = list(range(1, 9))
+        allocations = allocate_individual_pairs(members, seed=13, initial_loads={1: 1000})
+        loads = Counter(item.evaluator_id for item in allocations)
+
+        self.assertEqual(len(allocations), 141)
+        self.assertEqual(loads[1], 1)
+        self.assertEqual(len(loads), 8)
+        self.assertEqual(len(allocations), len({
+            (item.left_id, item.right_id, item.evaluator_id) for item in allocations
+        }))
+        self.assertEqual(Counter(item.evaluator_id for item in allocate_individual_pairs(
+            members, seed=13, initial_loads={1: 1000}, minimum=0,
+        ))[1], 0)

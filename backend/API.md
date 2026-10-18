@@ -23,7 +23,7 @@ All routes except `GET /health` require `Authorization: Bearer <Google ID token>
 | `GET /assignments/?classroom_id=...` | member or assigned instructor | Students see published Assignments only; instructors also see drafts. `skip >= 0`, `1 <= limit <= 500`. |
 | `GET/PUT /assignments/{id}/setup` | assigned instructor | Read or replace full setup; PUT is closed after publication. |
 | `GET /assignments/{id}/criteria` | assigned instructor | Criterion IDs, names, weights, section flags. |
-| `GET /assignments/{id}/preview` | assigned instructor | `{pair_assignments}` without persistence; initial allocations use distinct eligible Students up to five per criterion/subject pair. |
+| `GET /assignments/{id}/preview` | assigned instructor | `{pair_assignments}` without persistence; initial allocations use distinct eligible Students up to five per criterion/subject pair, then top up so every eligible Student has at least one pair per criterion. `assigned_evaluators` may therefore exceed `target_evaluations`. |
 | `POST /assignments/{id}/publish` | assigned instructor | `{pair_assignments}`; one publication only. Fewer than five eligible Students for a pair does not by itself block publication. |
 | `GET /assignments/{id}/evaluation/{group\|individual}` | assigned student | Only that student's Pair IDs, subject labels, draft/submitted choices, deadline and open state. |
 | `PUT /assignments/{id}/evaluation/{section}/draft` | assigned student | `{changes:[{pair_id,choice}]}`; choice 1–5 or null to clear. Changes are atomic. |
