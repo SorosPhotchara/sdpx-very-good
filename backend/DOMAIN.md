@@ -1,6 +1,6 @@
 # PairEval domain model
 
-The system uses one verified Google email as a person's identity. Platform administrators are configured through `ADMIN_EMAILS`; instructor eligibility comes only from `INSTRUCTOR_EMAILS`. A Classroom stores its assigned instructor emails; a Student row is a classroom membership keyed by `(classroom_id, email)`. The same person may have Student rows in several classrooms. CSV import creates pending memberships; `GET /me` records `activated_at` for all matching memberships on first verified sign-in.
+The system uses one verified Google email as a person's identity. Platform administrators are configured through `ADMIN_EMAILS`; instructor eligibility comes only from `INSTRUCTOR_EMAILS`. A Classroom stores its assigned instructor emails; a Student row is a classroom membership keyed by `(classroom_id, email)`. The same person may have Student rows in several classrooms. CSV import creates pending memberships; `GET /me` records `activated_at` for all matching memberships on first verified sign-in. An assigned instructor may remove a membership while no evaluation exists in that classroom; removal is permanent and takes that member’s notifications and group-move audit rows with it. No snapshot is kept, because no evaluation evidence can exist at that point. The emptied group rows stay, and an emptied roster accepts a fresh CSV import.
 
 ## Evaluation lifecycle
 

@@ -123,6 +123,32 @@ def create_student(db: Session, student: schemas.StudentCreate):
     db.refresh(db_student)
     return db_student
 
+
+def delete_student(db: Session, student_id: int) -> None:
+    """Remove one roster membership and every row that still references it.
+
+    Pairs are deliberately absent: callers only reach this before any evaluation
+    exists, and deleting pairs would discard other students' evidence. A stray pair
+    therefore raises on the foreign key and rolls the whole removal back.
+    """
+    submissions = select(models.Submission.id).where(models.Submission.student_id == student_id)
+    deletions = [
+        (models.SubmissionChoice, models.SubmissionChoice.submission_id.in_(submissions)),
+        (models.DraftChoice, models.DraftChoice.student_id == student_id),
+        (models.Submission, models.Submission.student_id == student_id),
+        (models.Notification, models.Notification.student_id == student_id),
+        (models.Reassignment, models.Reassignment.student_id == student_id),
+        (models.Student, models.Student.id == student_id),
+    ]
+    try:
+        for model, condition in deletions:
+            db.execute(delete(model).where(condition), execution_options={"synchronize_session": False})
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
 # Group
 
 def create_group(db: Session, group: schemas.GroupCreate):
