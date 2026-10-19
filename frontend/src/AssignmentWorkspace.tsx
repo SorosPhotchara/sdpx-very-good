@@ -14,7 +14,7 @@ import { InstructorEvaluation } from './InstructorEvaluation'
 import { useLanguage } from './i18n'
 import { useResource } from './useResource'
 import { useAsyncLock } from './useAsyncLock'
-import { ToastNotice, useNotice } from './components/ui/toast'
+import { ToastNotice, useDismissActiveNotice, useNotice } from './components/ui/toast'
 
 type CriterionDraft = { name: string; weight: string }
 type SectionDraft = {
@@ -112,6 +112,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
   const [individual, setIndividual] = useState<SectionDraft>({ score: '0', participation: '0', deadline: '', criteria: [] })
   const [instructorWeight, setInstructorWeight] = useState('1')
   const [status, setStatus] = useNotice()
+  const dismissActiveNotice = useDismissActiveNotice()
   const action = useAsyncLock()
   const busy = action.busy
   const [editId, setEditId] = useState<number | null>(null)
@@ -122,6 +123,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
     + Number(group.participation || 0) + Number(individual.participation || 0)
 
   function openCreateEditor() {
+    dismissActiveNotice()
     setEditId(null)
     setTitle('')
     setGroup({ score: '10', participation: '0', deadline: '', criteria: [{ name: 'Quality', weight: '100' }] })

@@ -120,13 +120,14 @@ jobs:
   deploy-staging:
     needs: [lint-and-unit-test, e2e-tests, performance]
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     environment: staging
     steps:
       - uses: actions/checkout@v7
 
       - name: Deploy to Staging
-        run: npx vercel --token "$VERCEL_TOKEN" --yes
+        run: npx vercel --token "$VERCEL_TOKEN" --yes --logs
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
