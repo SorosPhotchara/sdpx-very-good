@@ -2,22 +2,22 @@
 
 **วันที่ตรวจ:** 2026-10-19
 **Commit ที่ตรวจ:** `d2c3695` (branch `develop`)
-**แก้แล้วที่:** branch `fix-fr` — G1–G7 ปิดแล้ว (ดูหัวข้อ 4)
+**แก้แล้วที่:** branch `fix-fr` — G1–G10 ปิดครบแล้ว และ merge `develop` ล่าสุดเข้ามาแล้ว (ดูหัวข้อ 4)
 **เกณฑ์:** [PRD v1.3](project-idea/pairwise_evaluation_prd.md) + [Definition of Done](project-idea/DEFINITION_OF_DONE.md) ทั้ง 13 หมวด
 
 ---
 
 ## สรุปคำตอบ
 
-**ตรงตาม PRD/DoD ในส่วนที่โค้ดคุมได้แล้ว** — ฟังก์ชันหลักทำครบ เทสเขียวทุกชุด (รวม 117 เทส) และช่องว่าง 7 ข้อ (G1–G7) แก้บน branch `fix-fr` เรียบร้อย เหลือ **3 ข้อเล็กที่ไม่บล็อก** (G8, G9, G10) และ **3 release gate** ที่ต้องใช้ตัวอาจารย์/เจ้าของโปรเจกต์เองจึงปิดได้
+**ตรงตาม PRD/DoD ครบทุกข้อที่โค้ดคุมได้แล้ว** — ช่องว่างทั้ง 10 ข้อ (G1–G10) แก้บน branch `fix-fr` เรียบร้อย merge `develop` ล่าสุดเข้ามาแล้ว และเทสเขียวทุกชุด รวม 120 เทส เหลือเพียง **3 release gate** ที่ต้องใช้ตัวอาจารย์/เจ้าของโปรเจกต์เองจึงปิดได้
 
 | ด้าน | สถานะ |
 |---|---|
 | Backend / API / Scoring / Pairing | ✅ ครบตาม PRD แทบทุกข้อ |
-| Report + Export CSV/XLSX | ✅ ครบ (ขาดคอลัมน์รวม 1 จุด — G9) |
+| Report + Export CSV/XLSX | ✅ ครบ รวมคอลัมน์รวมและชื่อ subject ใน coverage |
 | Student evaluation UI | ✅ countdown / progress / คำเตือน / ปุ่ม Save / layout แถวเดียว / แยกหน้า ครบแล้ว |
 | Interim score ฝั่งนักศึกษา | ✅ แก้แล้ว (G1) |
-| เทสอัตโนมัติ | ✅ เขียวหมด 117/117 |
+| เทสอัตโนมัติ | ✅ เขียวหมด 120/120 |
 | Release gates (Google จริง, Vercel, acceptance) | ⏳ ยังไม่ทำ |
 
 ---
@@ -26,15 +26,17 @@
 
 | ชุด | คำสั่ง | ผล | Exit |
 |---|---|---|---|
-| Backend + PostgreSQL 17 | `docker compose -f compose.test.yml run --build --rm unit python -m pytest -q` | **79 passed**, 3 warnings, 13.91s | 0 |
+| Backend + PostgreSQL 17 | `docker compose -f compose.test.yml run --build --rm unit python -m pytest -q` | **81 passed**, 3 warnings, 11.59s | 0 |
 | Backend lint | `.venv/Scripts/python.exe -m compileall -q app tests` | ผ่าน | 0 |
 | Frontend unit | `npm test` (`node --test`) | **8 passed**, 870ms | 0 |
 | Frontend type check | `npm run lint` (`tsc --noEmit`) | ผ่าน | 0 |
 | Frontend production build | `npm run build` (vite) | 2,023 modules, 2.73s | 0 |
-| Chromium E2E | `docker compose -f compose.test.yml run --build --rm e2e` | **30 passed** / 15 spec files, 1.2m | 0 |
+| Chromium E2E | `docker compose -f compose.test.yml run --build --rm e2e` | **31 passed** / 16 spec files, 1.2m | 0 |
 | Migration ฐานเปล่า → head | `alembic upgrade head` บน PostgreSQL 17 ใหม่ | ถึง `20261017_unique_pair_votes (head)` | 0 |
 
-**รวม 117 เทส ผ่านหมด ไม่มีแดง ไม่มี skip** (เพิ่มจากเดิม 115 ด้วยเทสใหม่ที่คุม G1, G2, G3, G5)
+**รวม 120 เทส ผ่านหมด ไม่มีแดง ไม่มี skip** (เพิ่มจากเดิม 115 ด้วยเทสที่คุม G1–G10 และ spec `instructor-pair-planner` ที่ติดมากับ `develop`)
+
+รันซ้ำทั้งหมดอีกครั้ง**หลัง merge `develop`** (commit `77f9423`) ซึ่งนำ `DisclosureSummary` และ instructor pair planner ตัวใหม่เข้ามา
 
 E2E ครบทั้ง 15 ไฟล์: `classroom-management`(2), `completion`(1), `core-flows`(5), `deadline-and-progress`(1), `evaluation-responsiveness`(2), `initial-evaluation-load`(1), `language-layout`(3), `resource`(3), `responsive-navigation`(2), `responsive`(3), `roster-management`(2), `scale`(1), `shadcn-dialog`(1), `sonner`(1), `toast`(2)
 
@@ -145,7 +147,7 @@ FR-ASSIGN-05 ✅ `publish.py:26-28` (≥3 กลุ่ม), `pairing.py:110-111`
 | **FR-REPORT-07 rolling + Interim** | ✅ **แก้แล้ว (G1)** | คะแนน rolling + label Interim ฝั่งนักศึกษาครบแล้ว |
 | FR-REPORT-08 | ✅ | `routes/reports.py:67-68` |
 | FR-EXPORT-01/03/04/05 | ✅ | `routes/reports.py:71-100`, `xlsx_export.py:54` (3 sheets), `routes/reports.py:20-30` (ชื่อไฟล์ + RFC 5987 รองรับชื่อไทย) |
-| FR-EXPORT-02 "Individual Summary + total" | ⚠️ **G9** | มีคะแนนแยกครบทุกคอลัมน์ แต่**ไม่มีคอลัมน์รวมยอดเดียว** (`export.py:30-38`) |
+| FR-EXPORT-02 "Individual Summary + total" | ✅ **แก้แล้ว (G9)** | เพิ่มคอลัมน์ `total_score` = work + participation ทั้งสองส่วน; ส่วนที่ได้รับการยกเว้นเป็น `None` จึงถูกข้าม ไม่ถูกนับเป็น 0 (`export.py`) |
 
 ---
 
@@ -159,9 +161,9 @@ FR-ASSIGN-05 ✅ `publish.py:26-28` (≥3 กลุ่ม), `pairing.py:110-111`
 | §4 Assignment และ Criteria (9) | ✅ 9/9 | |
 | §5 Pairing Engine (9) | ✅ 9/9 | ยืนยัน 200 คน/10 กลุ่มด้วย `scale.spec.ts` วันนี้ |
 | §6 Evaluation และ Submission (10) | ✅ 10/10 | หน้า Group/Individual แยกจากกันจริงแล้ว (G7); progress/deadline/submission ล่าสุด ครบ พร้อม countdown และปุ่ม Save |
-| §7 Group Reassignment (6) | ✅ 6/6 | backend เก็บ actor ครบ (`reassignment.py:204-207`) แต่ UI ไม่โชว์ (G8) |
+| §7 Group Reassignment (6) | ✅ 6/6 | backend เก็บ actor ครบ และ UI โชว์ชื่อนักศึกษา ชื่อกลุ่มเดิม/ใหม่ และผู้สั่งย้ายแล้ว (G8) |
 | §8 Scoring (11) | ✅ 11/11 | **"คะแนนระหว่างช่วงประเมินมีสถานะ Interim"** แก้แล้ว (G1); "ยังไม่มีข้อมูล" ก่อน final ✅ (`ScoreWorkspace.tsx:9`) |
-| §9 Report และ Export (9) | ⚠️ 8✅ 1⚠️ | formula injection ป้องกันแล้ว + มีเทส; ขาดคอลัมน์รวม (G9) |
+| §9 Report และ Export (9) | ✅ 9/9 | formula injection ป้องกันแล้ว + มีเทส; เพิ่มคอลัมน์รวม (G9) และ coverage โชว์ชื่อ subject (G10) |
 | §10 UI และ Accessibility (6) | ✅ 6/6 | **ยืนยัน: ไม่มี `alert`/`confirm`/`prompt` ของ browser เลย**; TH/EN, data-testid, focus state ครบ |
 | §11 Security และ Data Integrity (7) | ✅ 7/7 | ยืนยัน unique indexes จาก DB จริง; archive snapshot ≥366 วัน |
 | §12 Performance และ Reliability (5) | ✅ 5/5 | <2s ยืนยันวันนี้; migration ฐานเปล่า→head ยืนยันวันนี้; k6 เป็นผล 2026-10-17 |
@@ -182,27 +184,29 @@ FR-ASSIGN-05 ✅ `publish.py:26-28` (≥3 กลุ่ม), `pairing.py:110-111`
 | **G4** | ไม่มีปุ่ม Save (FR-EVAL-04) | ปุ่ม `save-draft` + hook คืนผลสำเร็จจริง จึงยืนยันได้ว่าบันทึกแล้ว; ยังคง autosave ไว้ | `feat(evaluation): separate evaluation pages…` |
 | **G6** | layout ไม่ตรง mock (FR-EVAL-02/03) | แถวเดียว `ซ้าย — 5 ระดับ — ขวา`; ≤900px ยุบเป็นชื่อสองฝั่งแถวบน สเกลแถวล่าง | ↑ commit เดียวกัน |
 | **G7** | Group/Individual อยู่จอเดียวกัน (FR-EVAL-01/07) | `StudentEvaluationPages` mount ทีละหน้า + page nav; คง disclosure ต่อ assignment ไว้เพื่อ lazy load | ↑ commit เดียวกัน |
+| **G8** | ประวัติ reassignment ไม่โชว์ผู้สั่งย้าย + โชว์ raw ID (FR-PAIR-14) | `/reassignments` ส่ง `student_email`, `old_group_name`, `new_group_name`, `instructor_email`; UI โชว์ "นักศึกษา: กลุ่มเดิม → กลุ่มใหม่ · ย้ายโดย …" | `feat(reports): name reassignment actors…` |
+| **G9** | Individual Summary ไม่มีคอลัมน์รวม (FR-EXPORT-02) | เพิ่ม `total_score` = work + participation ทั้งสองส่วน ข้ามส่วนที่ยกเว้น | ↑ commit เดียวกัน |
+| **G10** | Coverage table โชว์ ID ไม่ใช่ชื่อ (FR-REPORT-03) | coverage ส่ง `left`/`right` เป็นชื่อกลุ่ม/อีเมล ใช้ labels ชุดเดียวกับ raw pair report; ไฟล์ export ยังใช้ ID เพื่อคง Raw Pairs เป็นชื่อแฝง | ↑ commit เดียวกัน |
 
-เทสที่เพิ่มคุมทั้ง 7 ข้อ: `backend/tests/test_evaluation_api.py::test_my_scores_carries_interim_and_final_state` และ `frontend/e2e/deadline-and-progress.spec.ts`
+เทสที่เพิ่มคุมทั้ง 10 ข้อ: `backend/tests/test_evaluation_api.py` (`test_my_scores_carries_interim_and_final_state`, `test_coverage_rows_name_their_subjects`, `test_individual_summary_export_totals_work_and_participation` และ assertion ใน `test_reassignment_preserves_eligible_pairs_and_records_notifications`), `frontend/e2e/deadline-and-progress.spec.ts` และส่วนที่เพิ่มใน `frontend/e2e/completion.spec.ts`
 
 **ข้อสังเกตที่ควรแจ้งอาจารย์**
 - **G7** แยกหน้าแบบ mount ทีละหน้า (page nav) ไม่ได้ทำเป็น URL/route แยก เพราะทั้งแอปยังไม่มี router เลย (การเลือกห้องเรียนก็เป็น state) ถ้าอาจารย์ต้องการ URL แยกจริง ๆ ต้องทำเป็นงาน routing แยกอีกงาน
 - **G6** PRD วาดเป็นปุ่มวงกลมเปล่า `( )( )( )( )( )` แต่ยังคงข้อความกำกับแต่ละระดับไว้ (ย่อขนาดลง) เพื่อไม่ให้เสีย accessibility และยังบอกความหมาย 1–5 ได้
 - **G4** เพิ่มปุ่ม Save ตาม PRD แต่ไม่ได้ถอด autosave ออก เพราะ autosave มีเทสคุมอยู่และช่วยกันคำตอบหายจริง
+- **G10** โชว์ชื่อเฉพาะในหน้า Report ของอาจารย์ (ผ่าน `require_owner`) ส่วนไฟล์ Export ยังใช้ ID ตามเดิม เพื่อไม่ให้อีเมลนักศึกษาหลุดลงไฟล์ที่ FR-SCORE-21 กำหนดให้เป็นชื่อแฝง
 
-### ยังเหลือ (ไม่บล็อก)
+### การ merge `develop`
 
-| # | เรื่อง | แก้ที่ไหน |
-|---|---|---|
-| G8 | ประวัติ reassignment ไม่โชว์ผู้สั่งย้าย + โชว์ raw ID | `frontend/src/api.ts:220-223`, `GroupReassignment.tsx:83` |
-| G9 | Individual Summary ไม่มีคอลัมน์รวม | `backend/app/export.py:30-38` |
-| G10 | Coverage table โชว์ `left_id`/`right_id` เป็นเลข ไม่ใช่ชื่อ | `frontend/src/ScoreWorkspace.tsx:24-26` |
+merge `develop` (`77f9423`) เข้ามาแล้ว — develop เปลี่ยนหัว disclosure ไปใช้ `DisclosureSummary` ร่วมกันและรื้อ instructor pair planner ใหม่
+conflict มีจุดเดียวคือหัวของ evaluation section ซึ่ง branch นี้เปลี่ยนเป็นหน้าแยกไปแล้ว (G7) จึงคงโครงหน้าแยกไว้และให้ wrapper ใช้ `DisclosureSummary` ของ develop
+เทสของ develop (`instructor-pair-planner.spec.ts`) ผ่านด้วยโครงใหม่นี้ และ layout แถวเดียว (G6) ที่ผมแก้ในหน้าประเมินของอาจารย์ยังอยู่ครบหลัง merge
 
 ---
 
 ## 5. ช่องว่างในการเทส (เทสเขียวหมด แต่ไม่ได้คุมเรื่องเหล่านี้)
 
-**นี่คือความเสี่ยงที่ควรบอกอาจารย์** — ผ่าน 117 เทสไม่ได้แปลว่าคุมครบ
+**นี่คือความเสี่ยงที่ควรบอกอาจารย์** — ผ่าน 120 เทสไม่ได้แปลว่าคุมครบ
 
 | เรื่อง | ความเสี่ยง |
 |---|---|
@@ -226,4 +230,4 @@ FR-ASSIGN-05 ✅ `publish.py:26-28` (≥3 กลุ่ม), `pairing.py:110-111`
 ---
 
 *รายงานนี้สร้างจากการอ่านโค้ด (ทุกข้ออ้าง file:line) + รันเทสจริงทั้ง 7 ชุดเมื่อ 2026-10-19*
-*การตรวจรอบแรกทำบน `d2c3695` โดยไม่แก้โค้ด จากนั้นแก้ G1–G7 บน branch `fix-fr` แล้วรันทั้ง 7 ชุดซ้ำจนเขียวหมด 117 เทส*
+*การตรวจรอบแรกทำบน `d2c3695` โดยไม่แก้โค้ด จากนั้นแก้ G1–G10 บน branch `fix-fr` merge `develop` (`77f9423`) เข้ามา แล้วรันทั้ง 7 ชุดซ้ำจนเขียวหมด 120 เทส*
