@@ -137,6 +137,21 @@ class EvaluationApiTests(unittest.TestCase):
         self.assertIn("Evaluator 1", exported.text)
         self.assertNotIn(self.email, exported.text)
 
+    def test_my_scores_carries_interim_and_final_state(self) -> None:
+        self.sign_in(self.email)
+        before = self.client.get(f"/assignments/{self.assignment_id}/my-scores").json()
+        self.assertFalse(before["group_final"])
+        # No individual deadline is configured for this assignment, so that section never finalises.
+        self.assertFalse(before["individual_final"])
+        with Session(self.engine) as db:
+            assignment = db.get(models.Assignment, self.assignment_id)
+            assignment.group_deadline = datetime.now(UTC) - timedelta(minutes=1)
+            db.commit()
+        after = self.client.get(f"/assignments/{self.assignment_id}/my-scores").json()
+        self.assertTrue(after["group_final"])
+        self.assertFalse(after["individual_final"])
+        self.assertNotIn("students", after)
+
     def test_raw_pair_report_shows_latest_evaluator_answer_only_to_instructor(self) -> None:
         path = f"/assignments/{self.assignment_id}/report/raw-pairs"
         self.sign_in(self.email)

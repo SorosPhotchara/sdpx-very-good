@@ -25,7 +25,7 @@ const th: Record<string, string> = {
   'Scores and coverage': 'คะแนนและความครอบคลุม', 'Refresh scores': 'อัปเดตคะแนน',
   'Student': 'นักศึกษา', 'Group work': 'ผลงานกลุ่ม', 'Individual work': 'ผลงานรายบุคคล',
   'Group participation': 'การมีส่วนร่วมกลุ่ม', 'Individual participation': 'การมีส่วนร่วมรายบุคคล',
-  'No data': 'ยังไม่มีข้อมูล', 'Final': 'สรุปแล้ว', 'Interim — may change': 'ระหว่างดำเนินการ — อาจเปลี่ยนได้',
+  'No data': 'ยังไม่มีข้อมูล', 'Final': 'สรุปแล้ว', 'Interim — may change': 'Interim — อาจเปลี่ยนแปลงได้',
   'Criterion details and effective votes': 'รายละเอียดเกณฑ์และจำนวนคะแนนโหวต',
   'Section': 'ส่วน', 'Item ID': 'รหัสรายการ', 'Weighted score': 'คะแนนถ่วงน้ำหนัก',
   'Effective votes': 'จำนวนโหวตที่นับ', 'Pairs missing target coverage': 'คู่ที่ยังไม่ครบเป้าหมาย',

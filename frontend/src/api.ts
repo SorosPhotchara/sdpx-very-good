@@ -41,6 +41,7 @@ export type StudentScore = {
   group_work_score: number | null; individual_work_score: number | null
   group_participation_score: number | null; individual_participation_score: number | null
 }
+export type MyScores = StudentScore & { group_final: boolean; individual_final: boolean }
 export type AssignmentReport = {
   assignment_id: number; title: string; students: StudentScore[]
   groups: { group_id: number; name: string; work_score: number | null }[]
@@ -314,9 +315,9 @@ export async function submitEvaluation(assignmentId: number, section: string): P
   return readJson<{ submission_id: number; answered: number; assigned: number }>(response)
 }
 
-export async function getMyScores(assignmentId: number): Promise<StudentScore> {
+export async function getMyScores(assignmentId: number): Promise<MyScores> {
   const response = await fetch(`${API_BASE}/assignments/${assignmentId}/my-scores`, { headers: authHeaders() })
-  return readJson<StudentScore>(response)
+  return readJson<MyScores>(response)
 }
 
 export async function getAssignmentReport(assignmentId: number): Promise<AssignmentReport> {
