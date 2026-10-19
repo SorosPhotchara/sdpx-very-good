@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { openAssignmentEditor } from './ui-helpers'
 
 const widths = [320, 390, 768, 1024, 1440]
 
@@ -23,13 +24,17 @@ test('sign-in and assignment editor fit phones, tablets and desktops in both lan
     }
   }
   await page.getByRole('button', { name: /Explore as instructor/ }).click()
-  await page.getByRole('button', { name: /Manage classroom/ }).click()
-  await page.locator('summary').filter({ hasText: 'Create assignment' }).click()
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 })
     for (const language of ['TH', 'EN']) {
       await page.getByRole('button', { name: language, exact: true }).click()
       await expectPageFits(page, width)
+      const dialog = await openAssignmentEditor(page)
+      const bounds = (await dialog.boundingBox())!
+      expect(bounds.x).toBeGreaterThanOrEqual(0)
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width)
+      await expect(dialog.getByRole('region', { name: language === 'TH' ? 'รายละเอียดแบบประเมิน' : 'Assignment details' })).toBeVisible()
+      await dialog.getByRole('button', { name: language === 'TH' ? 'ปิดหน้าต่าง' : 'Close dialog' }).click()
     }
   }
   await page.setViewportSize({ width: 390, height: 900 })

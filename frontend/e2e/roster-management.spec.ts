@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { createClassroom } from './ui-helpers'
 
 const AUTH = { Authorization: 'Bearer mock:teacher@example.edu' }
 
@@ -7,8 +8,7 @@ test('instructor removes one student from a classroom that has no evaluation', a
   await page.getByRole('button', { name: 'EN', exact: true }).click()
   await page.getByRole('button', { name: /Explore as instructor/ }).click()
   const name = `Roster classroom ${Date.now()}`
-  await page.getByLabel('Add classroom').fill(name)
-  await page.getByLabel('Add classroom').press('Enter')
+  await createClassroom(page, name)
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
   const rooms = await page.request.get('http://127.0.0.1:8000/classrooms/', { headers: AUTH })
   const id = (await rooms.json()).find((room: { name: string }) => room.name === name).id

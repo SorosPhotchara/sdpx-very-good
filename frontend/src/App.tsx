@@ -197,7 +197,7 @@ export default function App() {
       <div className="brand"><span className="brand-mark"><img src="/brand-logo.png" alt="" /></span><span>PairEval</span><small>{language === 'th' ? 'ระบบประเมินแบบเปรียบเทียบคู่' : 'Pairwise evaluation'}</small></div>
       <div className="sidebar-label">{t('Classrooms')} <span>{classrooms.length.toString().padStart(2, '0')}</span></div>
       {currentUser?.is_instructor && <Dialog open={showClassroomForm} onOpenChange={setShowClassroomForm}>
-        <DialogTrigger asChild><Button type="button" className="classroom-create-toggle"><Plus aria-hidden="true" />{language === 'th' ? 'สร้างห้องเรียน' : 'New classroom'}</Button></DialogTrigger>
+        <DialogTrigger asChild><Button type="button" className="classroom-create-toggle" data-testid="create-classroom-trigger"><Plus aria-hidden="true" />{language === 'th' ? 'สร้างห้องเรียน' : 'New classroom'}</Button></DialogTrigger>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{language === 'th' ? 'สร้างห้องเรียน' : 'Create classroom'}</DialogTitle>
@@ -266,7 +266,7 @@ export default function App() {
             <div className="workspace-main"><div className="section-heading"><span className="section-count">01</span><h2>{t('Assignments')}</h2><span className="heading-rule" /></div><Suspense fallback={<WorkspaceLoading />}><AssignmentWorkspace key={selected.id} classroomId={selected.id} isInstructor={canManage} email={currentUser.email} actionTarget={assignmentActionTarget} /></Suspense></div>
             <aside className="workspace-side" data-testid="workspace-side"><div className="info-panel"><span className="panel-number">CLASSROOM / {String(selected.id).padStart(2, '0')}</span><h3>{language === 'th' ? 'รายละเอียดห้องเรียน' : 'Classroom details'}</h3><div className="info-row"><span>{language === 'th' ? 'รหัสห้อง' : 'Class ID'}</span><strong>#{selected.id}</strong></div><div className="info-row"><span>{language === 'th' ? 'อาจารย์' : 'Instructors'}</span><strong>{selected.instructor_emails.split(',').filter(Boolean).length}</strong></div></div>
               {canManage && <Dialog open={showSettings} onOpenChange={setShowSettings}>
-                <DialogContent data-testid="classroom-tools-dialog" onCloseAutoFocus={(event) => { event.preventDefault(); manageTriggerRef.current?.focus() }} className="flex max-h-[min(90dvh,52rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+                <DialogContent data-testid="classroom-tools-dialog" onEscapeKeyDown={(event) => { if (document.querySelector('[data-testid="action-toast"]')) event.preventDefault() }} onCloseAutoFocus={(event) => { event.preventDefault(); manageTriggerRef.current?.focus() }} className="flex max-h-[min(90dvh,52rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
                   <DialogHeader className="relative shrink-0 border-b px-4 py-4 pr-16 sm:px-5">
                     <DialogTitle>{language === 'th' ? 'จัดการห้องเรียน' : 'Manage classroom'}</DialogTitle>
                     <DialogDescription>{selected.name}</DialogDescription>

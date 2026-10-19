@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { createClassroom, closeClassroomManager, openAssignmentEditor } from './ui-helpers'
 
 test('switches between Thai and English on the sign-in page', async ({ page }) => {
   await page.goto('/')
@@ -16,9 +17,7 @@ test('instructor creates a classroom and imports its roster', async ({ page }) =
   await expect(page.getByText('teacher@example.edu')).toBeVisible()
 
   const classroomName = `E2E Classroom ${Date.now()}`
-  const classroomInput = page.getByLabel('Add classroom')
-  await classroomInput.fill(classroomName)
-  await classroomInput.press('Enter')
+  await createClassroom(page, classroomName)
   await expect(page.getByRole('heading', { name: classroomName })).toBeVisible()
 
   await page.getByRole('button', { name: /Manage classroom/ }).click()
@@ -41,7 +40,8 @@ test('instructor creates a classroom and imports its roster', async ({ page }) =
   await page.getByRole('button', { name: 'Add student', exact: true }).click()
   await expect(page.getByText('Added seven@example.edu to Gamma.')).toBeVisible()
 
-  await page.locator('summary').filter({ hasText: 'Create assignment' }).click()
+  await closeClassroomManager(page)
+  await openAssignmentEditor(page)
   await page.getByLabel('Title').fill('New review')
   const groupSection = page.getByRole('group', { name: 'Group evaluation' })
   await groupSection.getByLabel('Deadline').fill(new Date(Date.now() + 2 * 86400_000).toISOString().slice(0, 16))

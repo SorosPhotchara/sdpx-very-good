@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test'
+import { createClassroom, closeClassroomManager } from './ui-helpers'
 
 test('instructor renames a populated classroom, cancels deletion, then deletes it with confirmation', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'EN', exact: true }).click()
   await page.getByRole('button', { name: /Explore as instructor/ }).click()
   const original = `Managed classroom ${Date.now()}`
-  await page.getByLabel('Add classroom').fill(original)
-  await page.getByLabel('Add classroom').press('Enter')
+  await createClassroom(page, original)
   await expect(page.getByRole('heading', { name: original, exact: true })).toBeVisible()
   const rooms = await page.request.get('http://127.0.0.1:8000/classrooms/', { headers: { Authorization: 'Bearer mock:teacher@example.edu' } })
   const id = (await rooms.json()).find((room: { name: string }) => room.name === original).id
@@ -16,9 +16,11 @@ test('instructor renames a populated classroom, cancels deletion, then deletes i
   const renamed = `${original} renamed`
   await page.getByTestId('classroom-name').fill(renamed)
   await page.getByTestId('rename-classroom').click()
+  await expect(page.getByTestId('classroom-tools-dialog').getByText(renamed, { exact: true })).toBeVisible()
+  await expect(page.getByText('Classroom renamed.', { exact: true })).toBeVisible()
+  await closeClassroomManager(page)
   await expect(page.getByRole('heading', { name: renamed, exact: true })).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Classrooms' }).getByRole('button', { name: new RegExp(renamed) })).toBeVisible()
-  await expect(page.getByText('Classroom renamed.', { exact: true })).toBeVisible()
   await page.reload()
   await page.getByRole('navigation', { name: 'Classrooms' }).getByRole('button', { name: new RegExp(renamed) }).click()
   await page.getByRole('button', { name: /Manage classroom/ }).click()
@@ -33,7 +35,7 @@ test('instructor renames a populated classroom, cancels deletion, then deletes i
   await expect(page.getByTestId('confirm-delete-classroom')).toBeDisabled()
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   expect(deletes).toBe(0)
-  await expect(page.getByRole('heading', { name: renamed, exact: true })).toBeVisible()
+  await expect(page.getByTestId('classroom-tools-dialog').getByText(renamed, { exact: true })).toBeVisible()
   await page.getByTestId('delete-classroom').click()
   await page.getByTestId('confirm-classroom-name').fill(renamed)
   await page.getByTestId('confirm-delete-classroom').click()
@@ -58,7 +60,7 @@ test('rename and deletion failures retain the room and allow a safe retry', asyn
   await page.getByTestId('classroom-name').fill('Failed rename')
   await page.getByTestId('rename-classroom').click()
   await expect(page.getByRole('status').filter({ hasText: 'Try again later.' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'PairEval Demo', exact: true })).toBeVisible()
+  await expect(page.getByTestId('classroom-tools-dialog').getByText('PairEval Demo', { exact: true })).toBeVisible()
   await expect(page.getByTestId('rename-classroom')).toBeEnabled()
   await page.getByTestId('delete-classroom').click()
   await page.getByTestId('confirm-classroom-name').fill('PairEval Demo')
@@ -67,5 +69,6 @@ test('rename and deletion failures retain the room and allow a safe retry', asyn
   await expect(page.getByTestId('delete-classroom-dialog')).toBeVisible()
   await expect(page.getByTestId('confirm-delete-classroom')).toBeEnabled()
   await page.getByTestId('delete-classroom-dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
+  await closeClassroomManager(page)
   await expect(page.getByRole('heading', { name: 'PairEval Demo', exact: true })).toBeVisible()
 })

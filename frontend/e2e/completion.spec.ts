@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { createClassroom, closeClassroomManager, openAssignmentEditor } from './ui-helpers'
 
 test('complete publication, submission, scores and exports with real API', async ({ page }) => {
   test.setTimeout(90000)
@@ -13,8 +14,7 @@ test('complete publication, submission, scores and exports with real API', async
   release()
   await page.unrouteAll({ behavior: 'wait' })
   const classroom = `Complete flow ${Date.now()}`
-  await page.getByLabel('Add classroom').fill(classroom)
-  await page.getByLabel('Add classroom').press('Enter')
+  await createClassroom(page, classroom)
   await expect(page.getByRole('heading', { name: classroom, exact: true })).toBeVisible()
   await page.getByRole('button', { name: /Manage classroom/ }).click()
   await page.getByLabel('Import student roster (CSV)').setInputFiles({ name: 'roster.csv', mimeType: 'text/csv', buffer: Buffer.from('email,groupname\n' + Array.from({ length: 9 }, (_, i) => `student${i + 1}@example.edu,${i >= 6 ? '=SUM(1)' : `Group ${Math.floor(i / 3)}`}`).join('\n')) })
@@ -25,7 +25,8 @@ test('complete publication, submission, scores and exports with real API', async
   const createdClassroom = (await classroomList.json()).find((item: { name: string }) => item.name === classroom)
   const legacyGroup = await page.request.post('http://127.0.0.1:8000/groups/', { headers: { Authorization: 'Bearer mock:teacher@example.edu' }, data: { name: '=SUM(1)', classroom_id: createdClassroom.id } })
   expect(legacyGroup.ok()).toBeTruthy()
-  await page.locator('summary').filter({ hasText: 'Create assignment' }).click()
+  await closeClassroomManager(page)
+  await openAssignmentEditor(page)
   const title = `Complete review ${Date.now()}`
   await page.getByLabel('Title', { exact: true }).fill(title)
   await page.getByRole('group', { name: 'Group evaluation', exact: true }).getByLabel('Deadline').fill(new Date(Date.now() + 86400000).toISOString().slice(0, 16))
