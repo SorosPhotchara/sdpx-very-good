@@ -6,6 +6,7 @@ import { useAsyncLock } from './useAsyncLock'
 import { ToastNotice, useNotice } from './components/ui/toast'
 import { Button } from './components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './components/ui/alert-dialog'
+import { DisclosureSummary } from './components/ui/disclosure-summary'
 
 export function GroupReassignment({ classroomId, isInstructor }: { classroomId: number; isInstructor: boolean }) {
   const { t, language, date } = useLanguage()
@@ -53,7 +54,7 @@ export function GroupReassignment({ classroomId, isInstructor }: { classroomId: 
 
   if (!isInstructor) return resource.error ? <p role="alert">{resource.error}</p> : notifications.length ? <div className="mt-3 text-sm"><h3 className="font-medium">{t('Notifications')}</h3>{notifications.map((item) => <p key={item.id}>{item.message} ({date(item.created_at)})</p>)}</div> : null
   return <details onToggle={(event) => { if (event.currentTarget.open) setActivated(true) }} className="group-reassignment mt-3 rounded-xl border p-3 text-sm">
-    <summary className="cursor-pointer font-medium">{t('Move student between groups')}</summary>
+    <DisclosureSummary className="font-medium">{t('Move student between groups')}</DisclosureSummary>
     <Button type="button" variant="outline" disabled={moving || resource.loading} className="mt-2" onClick={() => void resource.refresh()}>{t('Refresh roster and history')}</Button>
     {resource.loading && <p role="status">{language === 'th' ? 'กำลังโหลดรายชื่อ...' : 'Loading roster...'}</p>}
     {resource.error && <p role="alert">{resource.error}</p>}

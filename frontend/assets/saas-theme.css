@@ -121,6 +121,10 @@ body { color: var(--ink); background: var(--page); font-family: "DM Sans Variabl
 .workspace-main summary { color: var(--ink); }
 .workspace-main summary:hover { color: var(--brand-strong); }
 .workspace-main details > summary::before, .workspace-side details > summary::before { border-left-color: var(--brand); }
+details > summary.app-disclosure-summary::before { content: none; display: none; }
+details > summary.app-disclosure-summary > svg { flex: none; color: var(--brand); transition: transform .16s ease; }
+details[open] > summary.app-disclosure-summary > svg { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { details > summary.app-disclosure-summary > svg { transition: none; } }
 .assignment-card > span:first-child { color: var(--ink); }
 .assignment-editor > summary { background: var(--surface-tint) !important; color: var(--brand-strong) !important; }
 .assignment-section { border-color: var(--line) !important; border-radius: 12px; background: var(--surface-subtle) !important; }
