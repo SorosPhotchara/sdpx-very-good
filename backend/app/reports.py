@@ -45,6 +45,9 @@ def assignment_report(db: Session, assignment: models.Assignment) -> dict:
     pairs = list(effective_pairs.values())
     group_scores: dict[int, float | None] = {group.id: None for group in groups}
     individual_scores: dict[int, float | None] = {student.id: None for student in students}
+    # Readable subject labels for the coverage report, matching raw_pair_responses.
+    group_labels = {group.id: group.name for group in groups}
+    student_labels = {student.id: student.email for student in students}
     coverage = []
     criterion_scores = []
 
@@ -127,12 +130,14 @@ def assignment_report(db: Session, assignment: models.Assignment) -> dict:
                     votes_by_pair[key].add(pair.assigned_to_student_id)
                 else:
                     result[0] += 1
+        labels = group_labels if criterion.is_group else student_labels
         for (left, right), eligible in sorted(eligible_by_pair.items()):
             target_evaluations = min(5, len(eligible))
             count = len(votes_by_pair[(left, right)])
             instructor_count, effective_count, left_points, right_points = pair_results[(left, right)]
             coverage.append({"section": section, "criterion_id": criterion.id, "criterion": criterion.name, "left_id": left,
-                             "right_id": right, "eligible_evaluators": len(eligible),
+                             "right_id": right, "left": labels.get(left), "right": labels.get(right),
+                             "eligible_evaluators": len(eligible),
                              "target_evaluations": target_evaluations,
                              "assigned_evaluators": len(assigned_by_pair[(left, right)]),
                              "votes": count, "missing_to_target": max(0, target_evaluations - count),

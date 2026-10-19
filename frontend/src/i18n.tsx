@@ -43,7 +43,7 @@ const th: Record<string, string> = {
   'Vote saved.': 'บันทึกคะแนนแล้ว', 'Instructor pair assigned.': 'กำหนดคู่ให้อาจารย์แล้ว',
   'Move student between groups': 'ย้ายนักศึกษาระหว่างกลุ่ม', 'Refresh roster and history': 'อัปเดตรายชื่อและประวัติ',
   'Choose student': 'เลือกนักศึกษา', 'Target group': 'กลุ่มปลายทาง', 'Move': 'ย้าย',
-  'Recent moves': 'การย้ายล่าสุด', 'Notifications': 'การแจ้งเตือน',
+  'Recent moves': 'การย้ายล่าสุด', 'Notifications': 'การแจ้งเตือน', 'Moved by': 'ย้ายโดย',
   'Move this student and update affected pair assignments?': 'ย้ายนักศึกษาและปรับคู่ประเมินที่เกี่ยวข้องหรือไม่?',
   'Could not load assignments.': 'โหลดงานประเมินไม่สำเร็จ', 'Assignment created.': 'สร้างงานประเมินแล้ว',
   'Assignment updated.': 'อัปเดตงานประเมินแล้ว', 'Could not create assignment.': 'สร้างงานประเมินไม่สำเร็จ',

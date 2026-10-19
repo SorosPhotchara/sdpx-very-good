@@ -18,6 +18,18 @@ def _safe(value: object) -> object:
     return value
 
 
+def _student_total(student: dict) -> float | None:
+    """Work plus participation across both sections; None when the student has no score at all.
+
+    Exempt components are None rather than zero, so they are skipped instead of
+    dragging the total down.
+    """
+    parts = [student["group_work_score"], student["individual_work_score"],
+             student["group_participation_score"], student["individual_participation_score"]]
+    scored = [value for value in parts if value is not None]
+    return sum(scored) if scored else None
+
+
 def sheet_data(db: Session, assignment: models.Assignment, sheet: str) -> tuple[tuple[str, ...], list[dict]]:
     if sheet == "groups":
         report = assignment_report(db, assignment)
@@ -32,10 +44,11 @@ def sheet_data(db: Session, assignment: models.Assignment, sheet: str) -> tuple[
         criterion_fields = [(item.id, f"criterion_{item.id}_{item.name}")
                             for item in db.query(models.Criteria).filter_by(assignment_id=assignment.id, is_group=False).order_by(models.Criteria.id)]
         fields = ("student_id", "email", "group_name", "group_work_score", *(field for _, field in criterion_fields), "individual_work_score",
-                  "group_participation_score", "individual_participation_score")
+                  "group_participation_score", "individual_participation_score", "total_score")
         lookup = {(item["criterion_id"], item["item_id"]): item["weighted_score"] for item in report["criterion_scores"]}
         rows = [{**student, **{field: lookup.get((criterion_id, student["student_id"]))
-                               for criterion_id, field in criterion_fields}} for student in report["students"]]
+                               for criterion_id, field in criterion_fields},
+                 "total_score": _student_total(student)} for student in report["students"]]
     elif sheet == "pairs":
         fields = ("section", "criterion", "left_id", "right_id", "evaluator", "choice", "submitted_at")
         raw = raw_pair_responses(db, assignment)

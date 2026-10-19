@@ -92,6 +92,11 @@ test('complete publication, submission, scores and exports with real API', async
   await page.locator('summary').filter({ hasText: 'Scores and coverage' }).click()
   await expect(page.getByRole('table').filter({ has: page.getByRole('columnheader', { name: 'Student', exact: true }) }).locator('tbody tr')).toHaveCount(9)
   expect(reportReads).toBeGreaterThan(0)
+  // FR-REPORT-03: coverage rows name their subjects instead of showing raw ids.
+  await page.locator('summary').filter({ hasText: 'Pair coverage and raw responses' }).click()
+  const coverage = page.getByRole('region', { name: 'Pair coverage', exact: true })
+  await expect(coverage).toContainText('Group 0')
+  await expect(coverage).toContainText('Group 1')
   for (const name of ['Export groups CSV', 'Export students CSV', 'Export pairs CSV', 'Export Excel']) {
     const download = page.waitForEvent('download')
     await page.getByRole('button', { name, exact: true }).click()
@@ -120,4 +125,9 @@ test('complete publication, submission, scores and exports with real API', async
   await expect(page.getByText(/Moved student\./)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Recent moves', exact: true })).toBeVisible()
   await expect(page.getByLabel('Choose student').locator('option:checked')).toHaveText('student1@example.edu (Group 1)')
+  // FR-PAIR-14: the audit entry names the student, both groups and who ordered the move.
+  const moves = page.getByTestId('reassignment-history')
+  await expect(moves).toContainText('student1@example.edu')
+  await expect(moves).toContainText('Group 0 → Group 1')
+  await expect(moves).toContainText('Moved by teacher@example.edu')
 })

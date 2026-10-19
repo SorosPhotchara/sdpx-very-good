@@ -80,7 +80,11 @@ export function GroupReassignment({ classroomId, isInstructor }: { classroomId: 
         </AlertDialogContent>
       </AlertDialog>
     </div>
-    {history.length > 0 && <div className="mt-3"><h4 className="font-medium">{t('Recent moves')}</h4>{history.slice(0, 10).map((item) => <p key={item.id}>{t('Student')} #{item.student_id}: {t('Group')} #{item.old_group_id} → #{item.new_group_id} ({date(item.changed_at)})</p>)}</div>}
+    {history.length > 0 && <div className="mt-3" data-testid="reassignment-history"><h4 className="font-medium">{t('Recent moves')}</h4>{history.slice(0, 10).map((item) => <p key={item.id} className="reassignment-entry">
+      <strong>{item.student_email ?? `${t('Student')} #${item.student_id}`}</strong>
+      {': '}{item.old_group_name ?? `${t('Group')} #${item.old_group_id}`} → {item.new_group_name ?? `${t('Group')} #${item.new_group_id}`}
+      <small>{t('Moved by')} {item.instructor_email} · {date(item.changed_at)}</small>
+    </p>)}</div>}
     <ToastNotice notice={message} />
   </details>
 }

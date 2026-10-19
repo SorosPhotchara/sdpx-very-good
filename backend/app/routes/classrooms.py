@@ -240,8 +240,13 @@ def read_reassignments(
 ) -> list[dict]:
     require_owner(classroom_id, identity, db)
     history = db.query(models.Reassignment).filter_by(classroom_id=classroom_id).order_by(models.Reassignment.id.desc()).all()
-    return [{"id": item.id, "student_id": item.student_id, "old_group_id": item.old_group_id,
-             "new_group_id": item.new_group_id, "instructor_email": item.instructor_email,
+    # Names make the audit trail readable; a removed group keeps its id with no name.
+    students = {item.id: item.email for item in db.query(models.Student).filter_by(classroom_id=classroom_id)}
+    groups = {item.id: item.name for item in db.query(models.Group).filter_by(classroom_id=classroom_id)}
+    return [{"id": item.id, "student_id": item.student_id, "student_email": students.get(item.student_id),
+             "old_group_id": item.old_group_id, "old_group_name": groups.get(item.old_group_id),
+             "new_group_id": item.new_group_id, "new_group_name": groups.get(item.new_group_id),
+             "instructor_email": item.instructor_email,
              "changed_at": as_utc(item.changed_at)} for item in history]
 
 
