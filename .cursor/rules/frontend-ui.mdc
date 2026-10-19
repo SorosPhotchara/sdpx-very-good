@@ -1,0 +1,51 @@
+---
+description: Frontend product UI, component library, and responsive design rules
+globs: frontend/**/*.{ts,tsx,css}
+alwaysApply: false
+---
+
+# Frontend UI rules
+
+Apply these rules whenever changing the frontend UI or its interaction behavior.
+
+## Use the project's UI system
+
+- Build on the existing stack: React, TypeScript, Tailwind CSS, and the configured shadcn/ui setup in `frontend/components.json`.
+- Use shadcn/ui for forms, tables, dialogs, inputs, buttons, and other application controls. Before adding UI, inspect `frontend/src/components/ui/` and reuse its Button, Input, Label, Dialog, Alert, AlertDialog, and Toast components where they fit.
+- Compose screens from established components. Do not hand-build common primitives such as dialogs, menus, selects, tabs, tooltips, toasts, popovers, date pickers, or command palettes with raw HTML and custom event handling.
+- For hero sections and feature cards, choose an appropriate existing component from Aceternity UI, Magic UI, or 21st.dev when it fits the visual direction. Keep effects restrained for this academic SaaS product; do not add a showcase effect just because the library provides one.
+- For charts and analytics, choose Tremor or Recharts when the available data benefits from a chart. Keep accessible tables for detailed records and do not add a chart when there is no meaningful data to plot.
+- Use Framer Motion for meaningful page transitions or interaction feedback when motion improves orientation. Respect reduced-motion preferences and avoid decorative animation.
+- Check React, Tailwind, license, and runtime compatibility before adding a library or component. Do not upgrade the framework just to add a visual effect.
+- If a needed primitive is missing, use the relevant library's official CLI or documented component to add it. Check the generated code and dependency changes. If installation requires unavailable access or credentials, explain that constraint instead of imitating the library with a home-grown substitute.
+- Keep one coherent design system. Do not add a second component library when the existing shadcn/Radix components can do the job. If an additional library is needed, use its official component and document the reason in the change summary.
+- Use Tailwind utilities for component styling. Keep custom CSS limited to shared theme tokens, global styles, and cases Tailwind cannot express cleanly. Avoid one-off inline styles, arbitrary decorative effects, and repeated long class strings; extract a reusable project component or variant when a pattern recurs.
+
+## Icons
+
+- Use named icons from `lucide-react` for navigation, actions, status, and role cues. Import only the icons used by a component; do not draw replacement SVGs, use emoji, or mix icon families on the same screen.
+- Use a consistent 18–20px size and roughly 2px stroke for icons beside text. Keep color tied to the existing theme; the icon should clarify a label, not replace it.
+- Mark decorative icons `aria-hidden="true"`. Give icon-only controls an accessible name and a comfortable touch target. Use `ArrowRight` for entering an in-app workspace; reserve external-link icons for links that leave the app.
+
+## Make the interface clear and polished
+
+- Understand the user's task and the current screen before changing layout. Preserve existing product behavior, API contracts, permissions, and form validation unless the request explicitly changes them.
+- Give each screen a clear heading, concise supporting text, and visible primary action. Use spacing, type scale, color, and grouping consistently to make the next action easy to find.
+- Prefer focused dialogs or drawers for secondary management tasks that would otherwise make a page excessively long. Use the existing Dialog component; keep its title and actions visible, make long content scroll within the dialog, and provide a clear close/cancel action.
+- Design the full interaction: initial, loading, empty, success, error, disabled, and destructive-confirmation states. Show persistent status when the user needs to know whether an action was saved or assigned; do not rely on a short-lived toast alone.
+- Use concise, human-readable labels. This product supports Thai and English: route user-facing text through the existing i18n system and ensure Thai text wraps naturally without clipping.
+- Prefer the project's existing Noto Sans Thai and DM Sans fonts. Keep contrast, focus indicators, keyboard use, and accessible names/labels in place. Use semantic HTML and the accessibility behavior provided by the component library.
+- Avoid cramped layouts, tiny controls, unexplained icons, dense unwrapped tables, excessive borders, and long stacks of unrelated sections. Group related actions under clear headings and use progressive disclosure when it reduces cognitive load.
+
+## Responsive behavior
+
+- Start with a usable narrow-screen layout, then enhance it for wider screens. Check at approximately 360px, 768px, and desktop widths.
+- Prevent horizontal page overflow. Let controls wrap or stack, keep touch targets comfortable, and ensure dialog content fits and can scroll on small screens.
+- For dense tables, provide a deliberate small-screen presentation such as a labeled card list or a contained horizontal scroller; never shrink text until it becomes unreadable.
+
+## Project conventions and verification
+
+- Follow repository `AGENTS.md`. Use `data-testid` for elements referenced by tests and preserve or update meaningful accessibility selectors.
+- Keep changes focused. Do not modify `memory-bank/` or `docs/adr/` without asking first.
+- After UI changes, run the relevant frontend checks from `frontend/`: `npm run lint`, `npm test`, and `npm run build`. Fix failures caused by the change before finishing.
+- In the completion summary, state what changed, which checks passed, and any visual behavior that could not be verified in a browser.

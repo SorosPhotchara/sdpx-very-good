@@ -1,13 +1,133 @@
-name: CI
+name: CI/CD Pipeline
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
 
 permissions:
-  contents: read          # ให้สิทธิ์น้อยที่สุดเท่าที่จำเป็น
+  contents: read
+  checks: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
 
 jobs:
-  smoke:
+  lint-and-unit-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: echo "Pipeline works!"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Frontend unit tests with JUnit
+        working-directory: frontend
+        run: |
+          mkdir -p test-results
+          node --test \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=junit --test-reporter-destination=test-results/frontend-unit.xml \
+            tests/*.test.mjs
+
+      - name: Test backend with PostgreSQL
+        run: docker compose -f compose.test.yml up --build --abort-on-container-exit --exit-code-from unit unit
+
+      - name: Clean up backend test containers
+        if: always()
+        run: docker compose -f compose.test.yml down --volumes
+
+      - name: Upload backend coverage and unit reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-results-${{ github.sha }}
+          path: |
+            frontend/test-results/frontend-unit.xml
+            backend/coverage/
+            backend/test-results/backend-unit.xml
+          if-no-files-found: warn
+
+      - name: Test summary in pull requests
+        if: always() && github.event_name == 'pull_request'
+        uses: dorny/test-reporter@v3
+        with:
+          name: Backend unit test results
+          path: backend/test-results/backend-unit.xml
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+  e2e-tests:
+    needs: lint-and-unit-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run Playwright E2E tests
+        run: docker compose -f compose.test.yml up --build --abort-on-container-exit --exit-code-from e2e e2e
+
+      - name: Clean up E2E containers
+        if: always()
+        run: docker compose -f compose.test.yml down --volumes
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/e2e.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+  performance:
+    needs: e2e-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run k6 against disposable API and PostgreSQL
+        run: docker compose -f compose.test.yml --profile performance run --build --rm k6-load
+
+      - name: Clean up performance containers
+        if: always()
+        run: docker compose -f compose.test.yml --profile performance down --volumes
+
+  deploy-staging:
+    needs: [lint-and-unit-test, e2e-tests, performance]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Deploy to Staging
+        run: npx vercel --token "$VERCEL_TOKEN" --yes
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

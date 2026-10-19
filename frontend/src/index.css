@@ -1,0 +1,31 @@
+@import "../assets/styles.css";
+@import "../assets/responsive-layout.css";
+@import "../assets/toast.css";
+@import "../assets/saas-theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 216 33% 97%;
+    --foreground: 218 32% 16%;
+    --primary: 226 65% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 218 28% 94%;
+    --secondary-foreground: 218 32% 22%;
+    --accent: 225 82% 96%;
+    --accent-foreground: 226 65% 40%;
+    --muted: 218 24% 96%;
+    --muted-foreground: 218 13% 43%;
+    --destructive: 354 57% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --card: 0 0% 100%;
+    --card-foreground: 218 32% 16%;
+    --border: 218 23% 88%;
+    --input: 218 23% 82%;
+    --ring: 226 65% 53%;
+    --radius: 0.75rem;
+  }
+}

@@ -1,102 +1,205 @@
-# Pairwise
+# PairEval
 
-เว็บสำหรับจัดอันดับสิ่งต่าง ๆ ด้วยการเปรียบเทียบทีละคู่ (pairwise comparison)
-สำหรับงานในมหาวิทยาลัย — จัดอันดับโปรเจกต์ หัวข้อ หรือ peer review
+ระบบประเมินผลงานนักศึกษาแบบเปรียบเทียบคู่ รองรับการจัดห้องเรียน งานประเมิน คะแนน รายงาน และการใช้งานทั้งภาษาไทยและอังกฤษ
 
-> **สถานะปัจจุบัน:** Frontend เป็น landing page + หน้าเปรียบเทียบจริงยังเป็น placeholder
-> Backend เริ่มมี domain code แล้ว (`backend/`, FastAPI) ครอบคลุม roster import และ publish service
-> แต่ยังไม่มี database จริง (มีแค่ in-memory Fake สำหรับ test) และยังไม่ได้ deploy
+คู่มือสำหรับอาจารย์และนักศึกษา: [USER_GUIDE.md](USER_GUIDE.md)
 
-## Tech Stack
+## สิ่งที่ต้องติดตั้ง
 
-| ส่วน | ที่ใช้ |
-| --- | --- |
-| Framework | React 19 |
-| Language | TypeScript 5.9 (strict) |
-| Styling | Tailwind CSS 4 (ผ่าน `@tailwindcss/vite`) |
-| Build tool | Vite 7 |
-| Runtime / package manager / test | Bun |
+- Git
+- Python 3.12 ขึ้นไป
+- Node.js และ npm
+- Docker Desktop
 
-Backend (FastAPI + SQLite) และ deployment (Vercel) เป็นแผนที่ตัดสินใจไว้แล้ว
-แต่ **ยังไม่ได้เริ่มทำ** — รายละเอียดและเหตุผลอยู่ใน
-[memory-bank/standards/tech-stack.md](memory-bank/standards/tech-stack.md)
+## ติดตั้งโปรเจกต์บน Windows
 
-## เริ่มใช้งาน
+### 1. Clone โปรเจกต์และสร้างไฟล์ environment
 
-```bash
-bun install
-bun run dev     # เปิด http://localhost:5173
+```powershell
+git clone https://github.com/SorosPhotchara/sdpx-very-good
+cd sdpx-very-good
+
+Copy-Item backend\.env.example backend\.env
+Copy-Item frontend\.env.example frontend\.env
 ```
 
-Backend (Python):
+ไฟล์ `.env` จะไม่ถูก commit เข้า Git ให้แต่ละคนสร้างจาก `.env.example` บนเครื่องของตนเอง
 
-```bash
-python -m venv .venv && .venv/Scripts/activate   # หรือ source .venv/bin/activate บน macOS/Linux
-pip install -r backend/requirements.txt -r requirements-dev.txt
-pytest                                            # รัน unit tests
-uvicorn app.main:app --reload --app-dir backend   # เปิด API ที่ http://localhost:8000
+### 2. เลือกวิธีเข้าสู่ระบบ
+
+`AUTH_MODE` ใน `backend/.env` กับ `VITE_AUTH_MODE` ใน `frontend/.env` ต้องตรงกันเสมอ ถ้าตั้งคนละโหมด Frontend จะส่ง token คนละชนิดกับที่ Backend ตรวจ และการเข้าสู่ระบบจะล้มเหลวด้วย 401
+
+#### โหมดทดลอง
+
+ค่าเริ่มต้นจาก `.env.example` ใช้งานโหมดทดลองได้ทันที
+
+`backend/.env`:
+
+```env
+APP_ENV=development
+AUTH_MODE=mock
+INSTRUCTOR_EMAILS=teacher@example.edu
+ADMIN_EMAILS=teacher@example.edu
 ```
 
-## Commands
+`frontend/.env`:
 
-| คำสั่ง | ทำอะไร |
-| --- | --- |
-| `bun install` | ติดตั้ง dependencies |
-| `bun run dev` | รัน Vite dev server (port 5173) |
-| `bun test` | รัน test ด้วย `bun:test` |
-| `bun run lint` | ตรวจ type ด้วย `tsc --noEmit` |
-| `bun run build` | ตรวจ type แล้ว build ลง `dist/` |
-| `bun run preview` | ดู production build ที่ build แล้ว |
-| `pytest` | รัน backend unit tests ด้วย `pytest` |
-| `uvicorn app.main:app --reload --app-dir backend` | รัน FastAPI dev server (port 8000) |
-
-## โครงสร้างโปรเจกต์
-
-```
-index.html                          entry point ของ Vite
-src/
-  main.tsx                          mount React ลง #root
-  App.tsx                           หน้า landing page
-  App.test.tsx                      test — render เป็น static markup แล้วเช็ค
-  index.css                         import Tailwind
-  components/
-    Navbar.tsx                      แถบนำทาง (data-testid="main-nav")
-    FeaturePlaceholder.tsx          ที่ที่หน้าเปรียบเทียบจะมาอยู่
-backend/
-  app/
-    main.py                         FastAPI app — /api/health, /api/rosters/import
-    domain/roster.py                parse_roster, normalize_email, allocate_pairs
-    services/publish.py             publish(assignment_id, repo)
-    repositories/protocols.py       AssignmentRepo (Protocol)
-  requirements.txt                  fastapi, pydantic, uvicorn
-tests/
-  unit/                             pytest — test_roster_import.py, test_publish.py
-  fakes/fake_assignment_repo.py     in-memory AssignmentRepo สำหรับ test
-  factories.py                      make_roster_row / make_roster_csv / make_roster
-  conftest.py                       fixtures — valid_csv, csv_with_bad_row_42
-memory-bank/standards/tech-stack.md บันทึกการตัดสินใจเรื่อง tech stack
-AGENTS.md                           กติกาสำหรับ AI agent ที่มาแก้ repo นี้
-LOOP_NOTES.md                       บันทึกผลการทดลองให้ AI รันจน test เขียว
+```env
+VITE_AUTH_MODE=mock
 ```
 
-## Test
+บัญชีตัวอย่างคือ `teacher@example.edu` และ `student1@example.edu`
 
-Test รันด้วย `bun:test` โดย render component เป็น static markup
-(`renderToStaticMarkup`) แล้วตรวจว่ามีข้อความและ `data-testid` ที่ต้องการ
-— ยังไม่ได้ใช้ DOM testing library
+#### Google Login
 
-```bash
-bun test
+สร้าง OAuth Client ID ชนิด **Web application** ใน Google Cloud และเพิ่ม Authorized JavaScript origins:
+
+```text
+http://localhost
+http://localhost:5173
 ```
 
-ตอนนี้มี 4 tests ใน [src/App.test.tsx](src/App.test.tsx) และผ่านทั้งหมด
+ตั้งค่า `backend/.env`:
 
-## การทำงานร่วมกัน
+```env
+GOOGLE_CLIENT_ID=<google-web-client-id>
+ADMIN_EMAILS=admin@gmail.com
+INSTRUCTOR_EMAILS=teacher1@gmail.com
+AUTH_MODE=google
+```
 
-อ่าน [AGENTS.md](AGENTS.md) ก่อนแก้โค้ด สรุปสั้น ๆ:
+ตั้งค่า `frontend/.env` โดยใช้ Client ID เดียวกัน:
 
-- ใส่ `data-testid` ให้ element ที่ test จะอ้างถึง
-- Commit ตาม Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`)
-- ทำงานบน branch `feature/*` แล้ว PR เข้า `develop`
-- test ต้องเขียวก่อนเสนอ diff — ถ้าแดงให้แก้ code ห้ามแก้ test
-- ห้าม commit secret ลง repo ใช้ env var เท่านั้น
+```env
+VITE_GOOGLE_CLIENT_ID=<google-web-client-id>
+VITE_AUTH_MODE=google
+```
+
+ถ้า OAuth App อยู่ในสถานะ Testing ต้องเพิ่มบัญชีที่ใช้เข้าสู่ระบบในรายการ Test users ของ Google Cloud ด้วย ผู้ดูแลระบบต้องใช้อีเมลใน `ADMIN_EMAILS` และอาจารย์ทุกคนต้องอยู่ใน `INSTRUCTOR_EMAILS` นักศึกษาต้องใช้อีเมลที่ตรงกับ roster CSV
+
+ระบบไม่มีหน้าสมัครสมาชิกแยก Google จะยืนยันตัวตนและ Backend จะกำหนดสิทธิ์จากอีเมล
+
+### 3. เปิด PostgreSQL
+
+รันจากโฟลเดอร์หลักของโปรเจกต์:
+
+```powershell
+docker compose up -d postgres
+```
+
+Docker ใช้สำหรับ PostgreSQL เท่านั้น ส่วน Backend และ Frontend รันบนเครื่อง โดยฐานข้อมูลเปิดที่ `127.0.0.1:5433`
+
+### 4. ติดตั้งและรัน Backend
+
+เปิด Terminal ใหม่:
+
+```powershell
+cd backend
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+```
+
+สร้าง virtual environment และติดตั้ง package เฉพาะครั้งแรก ส่วน `alembic upgrade head` ให้รันเมื่อสร้างฐานข้อมูลใหม่หรือหลังดึง migration ใหม่
+
+หากต้องการข้อมูลตัวอย่าง ให้รันหนึ่งครั้งก่อนเปิด Uvicorn:
+
+```powershell
+.\.venv\Scripts\python.exe seed_demo.py
+```
+
+Backend โหลดค่าจาก `backend/.env` อัตโนมัติ
+
+### 5. ติดตั้งและรัน Frontend
+
+เปิด Terminal อีกหน้าต่าง:
+
+```powershell
+cd frontend
+npm.cmd ci
+npm.cmd run dev -- --host localhost --port 5173
+```
+
+`npm.cmd ci` ทำเฉพาะครั้งแรกหรือเมื่อ dependencies เปลี่ยน จากนั้นเปิด [http://localhost:5173](http://localhost:5173)
+
+## การใช้งานสำหรับอาจารย์
+
+1. เข้าสู่ระบบด้วยอีเมลที่อยู่ใน `INSTRUCTOR_EMAILS`
+2. สร้าง Classroom จากแถบด้านซ้าย
+3. เปิด **จัดการห้องเรียน** และนำเข้า roster CSV
+   หรือกรอก **อีเมล Google ของนักศึกษา** กับ **ชื่อกลุ่ม** เพื่อเพิ่มทีละคนก่อนเผยแพร่ Assignment
+4. สร้าง Assignment กำหนดคะแนน Deadline และเกณฑ์ประเมิน
+5. ตรวจคู่ประเมินแล้ว Publish
+6. ติดตามผลประเมิน ดูคะแนน และดาวน์โหลดรายงาน
+
+ผู้ดูแลระบบที่อยู่ใน `ADMIN_EMAILS` เปิดหน้า **จัดการสิทธิ์อาจารย์** เพื่อดูรายชื่อที่อนุญาตได้ การเพิ่มหรือถอนสิทธิ์อาจารย์ต้องแก้ `INSTRUCTOR_EMAILS` ใน environment ของเซิร์ฟเวอร์แล้วเริ่มบริการใหม่ รายชื่อที่เคยบันทึกไว้ใน PostgreSQL ไม่ให้สิทธิ์อาจารย์
+
+รูปแบบ roster CSV:
+
+```csv
+email,groupname
+student1@gmail.com,Group 1
+student2@gmail.com,Group 1
+student3@gmail.com,Group 2
+student4@gmail.com,Group 2
+student5@gmail.com,Group 3
+student6@gmail.com,Group 3
+```
+
+ควรมีอย่างน้อย 3 กลุ่มก่อนเผยแพร่ Group Evaluation และกลุ่มต้องมีสมาชิกอย่างน้อย 3 คนจึงจะเปิด Individual Evaluation ได้
+
+## หยุดระบบ
+
+กด `Ctrl+C` ใน Terminal ของ Backend และ Frontend จากนั้นหยุด PostgreSQL:
+
+```powershell
+docker compose stop postgres
+```
+
+ข้อมูลยังคงอยู่ใน Docker volume `paireval_demo_data`
+
+## ทดสอบ
+
+เปิด PostgreSQL ก่อน แล้วรัน Backend tests จาก `backend/`:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
+
+หรือรัน pytest และ PostgreSQL ชั่วคราวใน container:
+
+```powershell
+cd backend
+npm.cmd run test:container
+```
+
+รัน Frontend checks จาก `frontend/`:
+
+```powershell
+npm.cmd test
+npm.cmd run test:e2e
+npm.cmd run lint
+npm.cmd run build
+```
+
+### Docker tests on a fresh machine
+
+Install Node.js and Docker Desktop, start Docker, and clone this repository. No image exported from another developer's machine is needed. Compose downloads the PostgreSQL/Python/Playwright base images and builds the test images from the Dockerfiles; later runs reuse cached layers.
+
+From the repository root, run these commands one at a time:
+
+```powershell
+npm.cmd --prefix backend run test:container
+npm.cmd --prefix frontend run test:e2e
+```
+
+These container tests use a temporary PostgreSQL database and mock Google identities. They do not need Neon credentials or a Google OAuth client. The runner removes the test containers and temporary data afterward.
+
+### Frontend UI components
+
+The frontend uses shadcn/ui Button, Input, Label, Alert and Alert Dialog components in `frontend/src/components/ui/`. The teal theme is defined in `frontend/src/index.css` and connected through `frontend/tailwind.config.cjs`; `frontend/components.json` configures the CLI and `@/` imports. Group reassignment uses an accessible modal confirmation; submission keeps its confirmation beside the evaluation.
+
+This application uses React 18 and Tailwind CSS 3. Add compatible components from `frontend/` with `npx.cmd shadcn@2.3.0 add <component>`. Components are source files owned by this repository; adapt their styles to the existing theme rather than replacing global typography or layout.
+
+คำสั่ง E2E ใช้ `compose.test.yml` เพื่อ build และรัน Playwright, Chromium, Backend และ Frontend ภายใน service `e2e` พร้อมฐานข้อมูล `test-db` แบบชั่วคราว ข้อมูลทดสอบอยู่ใน schema `paireval_e2e` ซึ่งถูกสร้างใหม่ทุกครั้ง และ container ทดสอบจะถูกลบเมื่อจบ

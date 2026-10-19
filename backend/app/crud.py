@@ -1,0 +1,220 @@
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from . import models, schemas
+
+# Classroom
+
+def get_classroom(db: Session, classroom_id: int):
+    return db.query(models.Classroom).filter(models.Classroom.id == classroom_id).first()
+
+
+def get_classrooms(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Classroom).offset(skip).limit(limit).all()
+
+
+def create_classroom(db: Session, classroom: schemas.ClassroomCreate):
+    db_classroom = models.Classroom(name=classroom.name, instructor_emails=classroom.instructor_emails)
+    db.add(db_classroom)
+    db.commit()
+    db.refresh(db_classroom)
+    return db_classroom
+
+def _archive_value(value: object) -> object:
+    return value.isoformat() if isinstance(value, datetime) else value
+
+
+def _snapshot_rows(db: Session, model: type, condition: object) -> list[dict]:
+    rows = db.scalars(select(model).where(condition)).all()
+    return [
+        {
+            column.name: _archive_value(getattr(row, column.name))
+            for column in model.__table__.columns
+        }
+        for row in rows
+    ]
+
+
+def delete_classroom(db: Session, classroom_id: int, deleted_by: str = "system") -> None:
+    """Archive evidence, then remove active records in one transaction."""
+    students = select(models.Student.id).where(models.Student.classroom_id == classroom_id)
+    assignments = select(models.Assignment.id).where(models.Assignment.classroom_id == classroom_id)
+    pairs = select(models.Pair.id).where(models.Pair.assignment_id.in_(assignments))
+    submissions = select(models.Submission.id).where(models.Submission.assignment_id.in_(assignments))
+    archived = [
+        (models.Classroom, models.Classroom.id == classroom_id),
+        (models.Group, models.Group.classroom_id == classroom_id),
+        (models.Student, models.Student.classroom_id == classroom_id),
+        (models.Assignment, models.Assignment.classroom_id == classroom_id),
+        (models.Criteria, models.Criteria.assignment_id.in_(assignments)),
+        (models.Pair, models.Pair.assignment_id.in_(assignments)),
+        (models.DraftChoice, models.DraftChoice.pair_id.in_(pairs)),
+        (models.Submission, models.Submission.assignment_id.in_(assignments)),
+        (models.SubmissionChoice, models.SubmissionChoice.submission_id.in_(submissions)),
+        (models.InstructorVote, models.InstructorVote.pair_id.in_(pairs)),
+        (models.Reassignment, models.Reassignment.classroom_id == classroom_id),
+        (models.Notification, models.Notification.student_id.in_(students)),
+    ]
+    deletions = [
+        (models.Notification, models.Notification.student_id.in_(students)),
+        (models.Reassignment, models.Reassignment.classroom_id == classroom_id),
+        (models.SubmissionChoice, models.SubmissionChoice.submission_id.in_(submissions)),
+        (models.DraftChoice, models.DraftChoice.pair_id.in_(pairs)),
+        (models.InstructorVote, models.InstructorVote.pair_id.in_(pairs)),
+        (models.Submission, models.Submission.assignment_id.in_(assignments)),
+        (models.Pair, models.Pair.assignment_id.in_(assignments)),
+        (models.Criteria, models.Criteria.assignment_id.in_(assignments)),
+        (models.Assignment, models.Assignment.classroom_id == classroom_id),
+        (models.Student, models.Student.classroom_id == classroom_id),
+        (models.Group, models.Group.classroom_id == classroom_id),
+        (models.Classroom, models.Classroom.id == classroom_id),
+    ]
+    try:
+        deleted_at = datetime.now(UTC)
+        db.execute(models.classroom_archives.insert().values(
+            classroom_id=classroom_id,
+            deleted_at=deleted_at,
+            retain_until=deleted_at + timedelta(days=366),
+            deleted_by=deleted_by,
+            snapshot={"version": 1, "tables": {
+                model.__tablename__: _snapshot_rows(db, model, condition)
+                for model, condition in archived
+            }},
+        ))
+        for model, condition in deletions:
+            db.execute(delete(model).where(condition), execution_options={"synchronize_session": False})
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+# Student
+
+def get_student(db: Session, student_id: int):
+    return db.query(models.Student).filter(models.Student.id == student_id).first()
+
+
+def get_students(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Student).offset(skip).limit(limit).all()
+
+
+def create_student(db: Session, student: schemas.StudentCreate):
+    group_name = student.group_name.strip() if student.group_name else None
+    group = None
+    if group_name:
+        group = db.query(models.Group).filter_by(
+            classroom_id=student.classroom_id, name=group_name
+        ).first()
+        if group is None:
+            group = models.Group(name=group_name, classroom_id=student.classroom_id)
+            db.add(group)
+            db.flush()
+    db_student = models.Student(
+        email=student.email,
+        display_name=student.display_name,
+        group_name=group_name,
+        group_id=group.id if group else None,
+        classroom_id=student.classroom_id,
+    )
+    db.add(db_student)
+    db.commit()
+    db.refresh(db_student)
+    return db_student
+
+
+def delete_student(db: Session, student_id: int) -> None:
+    """Remove one roster membership and every row that still references it.
+
+    Pairs are deliberately absent: callers only reach this before any evaluation
+    exists, and deleting pairs would discard other students' evidence. A stray pair
+    therefore raises on the foreign key and rolls the whole removal back.
+    """
+    submissions = select(models.Submission.id).where(models.Submission.student_id == student_id)
+    deletions = [
+        (models.SubmissionChoice, models.SubmissionChoice.submission_id.in_(submissions)),
+        (models.DraftChoice, models.DraftChoice.student_id == student_id),
+        (models.Submission, models.Submission.student_id == student_id),
+        (models.Notification, models.Notification.student_id == student_id),
+        (models.Reassignment, models.Reassignment.student_id == student_id),
+        (models.Student, models.Student.id == student_id),
+    ]
+    try:
+        for model, condition in deletions:
+            db.execute(delete(model).where(condition), execution_options={"synchronize_session": False})
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
+# Group
+
+def create_group(db: Session, group: schemas.GroupCreate):
+    db_group = models.Group(
+        name=group.name,
+        classroom_id=group.classroom_id,
+    )
+    db.add(db_group)
+    db.commit()
+    db.refresh(db_group)
+    return db_group
+
+
+def get_groups(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Group).offset(skip).limit(limit).all()
+
+# Assignment
+
+def get_assignment(db: Session, assignment_id: int):
+    return db.query(models.Assignment).filter(models.Assignment.id == assignment_id).first()
+
+
+def get_assignments(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Assignment).offset(skip).limit(limit).all()
+
+
+def create_assignment(db: Session, assignment: schemas.AssignmentCreate):
+    db_assignment = models.Assignment(
+        title=assignment.title,
+        description=assignment.description,
+        classroom_id=assignment.classroom_id,
+        group_score=assignment.group_score,
+        individual_score=assignment.individual_score,
+        instructor_weight=assignment.instructor_weight,
+        deadline=assignment.deadline,
+    )
+    db.add(db_assignment)
+    db.commit()
+    db.refresh(db_assignment)
+    return db_assignment
+
+# Criteria
+
+def create_criteria(db: Session, criteria: schemas.CriteriaCreate):
+    db_criteria = models.Criteria(
+        assignment_id=criteria.assignment_id,
+        name=criteria.name,
+        weight=criteria.weight,
+        is_group=criteria.is_group,
+    )
+    db.add(db_criteria)
+    db.commit()
+    db.refresh(db_criteria)
+    return db_criteria
+
+# Pair
+
+def create_pair(db: Session, pair: schemas.PairCreate):
+    db_pair = models.Pair(
+        assignment_id=pair.assignment_id,
+        criteria_id=pair.criteria_id,
+        left_id=pair.left_id,
+        right_id=pair.right_id,
+        pair_type=pair.pair_type,
+    )
+    db.add(db_pair)
+    db.commit()
+    db.refresh(db_pair)
+    return db_pair
