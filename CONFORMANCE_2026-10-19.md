@@ -2,20 +2,20 @@
 
 **วันที่ตรวจ:** 2026-10-19
 **Commit ที่ตรวจ:** `d2c3695` (branch `develop`)
-**แก้แล้วที่:** branch `fix-fr` — G1, G2, G3, G5 ปิดแล้ว (ดูหัวข้อ 4)
+**แก้แล้วที่:** branch `fix-fr` — G1–G7 ปิดแล้ว (ดูหัวข้อ 4)
 **เกณฑ์:** [PRD v1.3](project-idea/pairwise_evaluation_prd.md) + [Definition of Done](project-idea/DEFINITION_OF_DONE.md) ทั้ง 13 หมวด
 
 ---
 
 ## สรุปคำตอบ
 
-**ตรงตาม PRD/DoD ในส่วนที่โค้ดคุมได้แล้ว** — ฟังก์ชันหลักทำครบ เทสเขียวทุกชุด (รวม 117 เทส) และช่องว่าง 4 ข้อที่บล็อกการส่ง (G1, G2, G3, G5) แก้บน branch `fix-fr` เรียบร้อย เหลือ **6 ข้อ UI ที่ไม่ตรง PRD แต่ไม่บล็อก** (G4, G6–G10) และ **3 release gate** ที่ต้องใช้ตัวอาจารย์/เจ้าของโปรเจกต์เองจึงปิดได้
+**ตรงตาม PRD/DoD ในส่วนที่โค้ดคุมได้แล้ว** — ฟังก์ชันหลักทำครบ เทสเขียวทุกชุด (รวม 117 เทส) และช่องว่าง 7 ข้อ (G1–G7) แก้บน branch `fix-fr` เรียบร้อย เหลือ **3 ข้อเล็กที่ไม่บล็อก** (G8, G9, G10) และ **3 release gate** ที่ต้องใช้ตัวอาจารย์/เจ้าของโปรเจกต์เองจึงปิดได้
 
 | ด้าน | สถานะ |
 |---|---|
 | Backend / API / Scoring / Pairing | ✅ ครบตาม PRD แทบทุกข้อ |
 | Report + Export CSV/XLSX | ✅ ครบ (ขาดคอลัมน์รวม 1 จุด — G9) |
-| Student evaluation UI | ✅ countdown / progress / คำเตือน ครบแล้ว · ⚠️ เหลือเรื่อง layout และปุ่ม Save (G4, G6, G7) |
+| Student evaluation UI | ✅ countdown / progress / คำเตือน / ปุ่ม Save / layout แถวเดียว / แยกหน้า ครบแล้ว |
 | Interim score ฝั่งนักศึกษา | ✅ แก้แล้ว (G1) |
 | เทสอัตโนมัติ | ✅ เขียวหมด 117/117 |
 | Release gates (Google จริง, Vercel, acceptance) | ⏳ ยังไม่ทำ |
@@ -100,13 +100,13 @@ FR-ASSIGN-05 ✅ `publish.py:26-28` (≥3 กลุ่ม), `pairing.py:110-111`
 
 | ID | สถานะ | หมายเหตุ |
 |---|---|---|
-| FR-EVAL-01 หน้าเดียวทุก criteria (Group) | ⚠️ | แสดงทุก criterion/pair จริง แต่เป็น `<details>` ในการ์ด assignment ไม่ใช่ "หน้า" — แอปไม่มี router (`AssignmentWorkspace.tsx:251`) |
-| FR-EVAL-02 layout + จัดกลุ่มตาม criterion | ⚠️ | แต่ละคู่เป็น `<fieldset>` ที่ `<legend>` ซ้ำชื่อ criterion; ฝั่ง group ไม่มีหัวข้อ criterion แล้วไล่คู่ใต้หัวข้อ (`EvaluationWorkspace.tsx:94-101`) |
+| FR-EVAL-01 หน้าเดียวทุก criteria (Group) | ✅ **แก้แล้ว (G7)** | `StudentEvaluationPages` แสดงทีละหน้า มี page nav สลับ Group/Individual; หน้า Group ยังไล่ทุก criterion/pair ในหน้าเดียว |
+| FR-EVAL-02 layout คู่เปรียบเทียบ | ✅ **แก้แล้ว (G6)** | แถวเดียว `ซ้าย — 5 ระดับ — ขวา` ตาม mock; ยุบเป็นชื่อสองฝั่งบนแถวบนและสเกลแถวล่างเมื่อจอ ≤900px |
 | FR-EVAL-03 radio 5 ระดับ 1/3/5 | ✅ ค่า · ⚠️ layout | ค่าถูก (`EvaluationWorkspace.tsx:11,104`) แต่ PRD วาดเป็นแถวเดียว `Group A ( )( )( )( )( ) Group B` ของจริงแยกเป็น left — VS — right แถวหนึ่ง แล้ว radio อีกแถวล่าง (`:99-107`, `assets/styles.css:62-66`) |
-| FR-EVAL-04 ปุ่ม **Save** | ❌ **G4** | ไม่มีปุ่ม Save — autosave ทุกครั้งที่กด radio (`:104-105`) ฟังก์ชันครบแต่ไม่มี control ตามที่ PRD เขียน |
+| FR-EVAL-04 ปุ่ม **Save** | ✅ **แก้แล้ว (G4)** | เพิ่มปุ่ม `save-draft` ที่ flush ร่างแล้วยืนยันผลจริง (hook คืนค่าสำเร็จ/ไม่สำเร็จ) โดยยังคง autosave ไว้ |
 | FR-EVAL-05 ปุ่ม Submit + แก้ส่งใหม่ได้ | ✅ | `:116-117`, `:48-60` |
 | FR-EVAL-06 เตือนคู่ที่ยังไม่ประเมิน | ✅ **แก้แล้ว (G5)** | เพิ่มคำเตือนในหน้า (`unanswered-notice`) และย้ำจำนวนใน dialog ยืนยัน (`unanswered-warning`) — `EvaluationWorkspace.tsx` |
-| FR-EVAL-07 หน้า Individual แยก | ⚠️ | component/API/draft แยกจริง แต่เป็น `<details>` อันที่สองบนจอเดียวกัน |
+| FR-EVAL-07 หน้า Individual แยก | ✅ **แก้แล้ว (G7)** | mount ทีละหน้า — เปิด Individual แล้วหน้า Group จะถูก unmount (เทสยืนยันด้วย `toHaveCount(0)`) |
 | FR-EVAL-08 เฉพาะเพื่อนในกลุ่ม | ✅ | `:68-72` + บังคับที่ backend |
 | FR-EVAL-09 รูปแบบเดียวกับ Group | ⚠️ | ฝั่ง individual แบ่งหน้าทีละ criterion (มี navigator, "รอบ n/N", ปุ่มก่อนหน้า/ถัดไป) ไม่ได้ไล่ทุก criterion เหมือน group (`:82-92`, `:111-115`) |
 | FR-EVAL-10 Save/Submit แยกกัน | ✅ | `:43`, `:52` |
@@ -158,7 +158,7 @@ FR-ASSIGN-05 ✅ `publish.py:26-28` (≥3 กลุ่ม), `pairing.py:110-111`
 | §3 Classroom และ Roster (9) | ✅ 9/9 | header/email/แถวซ้ำ validate ครบ, import ไม่ทิ้งข้อมูลครึ่ง ๆ, pending activate ตอน login |
 | §4 Assignment และ Criteria (9) | ✅ 9/9 | |
 | §5 Pairing Engine (9) | ✅ 9/9 | ยืนยัน 200 คน/10 กลุ่มด้วย `scale.spec.ts` วันนี้ |
-| §6 Evaluation และ Submission (10) | ⚠️ 9✅ 1⚠️ | "หน้า Group และ Individual แยกจากกัน" — แยก logic จริงแต่เป็น section บนจอเดียว (G7); progress/deadline/submission ล่าสุด ครบและเพิ่ม countdown แล้ว |
+| §6 Evaluation และ Submission (10) | ✅ 10/10 | หน้า Group/Individual แยกจากกันจริงแล้ว (G7); progress/deadline/submission ล่าสุด ครบ พร้อม countdown และปุ่ม Save |
 | §7 Group Reassignment (6) | ✅ 6/6 | backend เก็บ actor ครบ (`reassignment.py:204-207`) แต่ UI ไม่โชว์ (G8) |
 | §8 Scoring (11) | ✅ 11/11 | **"คะแนนระหว่างช่วงประเมินมีสถานะ Interim"** แก้แล้ว (G1); "ยังไม่มีข้อมูล" ก่อน final ✅ (`ScoreWorkspace.tsx:9`) |
 | §9 Report และ Export (9) | ⚠️ 8✅ 1⚠️ | formula injection ป้องกันแล้ว + มีเทส; ขาดคอลัมน์รวม (G9) |
@@ -179,16 +179,21 @@ FR-ASSIGN-05 ✅ `publish.py:26-28` (≥3 กลุ่ม), `pairing.py:110-111`
 | **G2** | ไม่มี Countdown timer (FR-EVAL-13) | hook `useCountdown` + แถบ `evaluation-countdown` นับทุกวินาที | `feat(evaluation): add deadline countdown…` |
 | **G3** | ไม่มี progress bar ต่อ criterion (FR-SCORE-17) | `<progress>` ต่อ criterion นับ submitted จริง ไม่ใช่ draft | ↑ commit เดียวกัน |
 | **G5** | ไม่เตือนคู่ที่ยังไม่ประเมิน (FR-EVAL-06) | คำเตือนในหน้า + จำนวนคู่ที่ยังว่างใน dialog ยืนยัน | ↑ commit เดียวกัน |
+| **G4** | ไม่มีปุ่ม Save (FR-EVAL-04) | ปุ่ม `save-draft` + hook คืนผลสำเร็จจริง จึงยืนยันได้ว่าบันทึกแล้ว; ยังคง autosave ไว้ | `feat(evaluation): separate evaluation pages…` |
+| **G6** | layout ไม่ตรง mock (FR-EVAL-02/03) | แถวเดียว `ซ้าย — 5 ระดับ — ขวา`; ≤900px ยุบเป็นชื่อสองฝั่งแถวบน สเกลแถวล่าง | ↑ commit เดียวกัน |
+| **G7** | Group/Individual อยู่จอเดียวกัน (FR-EVAL-01/07) | `StudentEvaluationPages` mount ทีละหน้า + page nav; คง disclosure ต่อ assignment ไว้เพื่อ lazy load | ↑ commit เดียวกัน |
 
-เทสที่เพิ่มคุมทั้ง 4 ข้อ: `backend/tests/test_evaluation_api.py::test_my_scores_carries_interim_and_final_state` และ `frontend/e2e/deadline-and-progress.spec.ts`
+เทสที่เพิ่มคุมทั้ง 7 ข้อ: `backend/tests/test_evaluation_api.py::test_my_scores_carries_interim_and_final_state` และ `frontend/e2e/deadline-and-progress.spec.ts`
 
-### ยังเหลือ (ไม่บล็อก — ต้องถามอาจารย์ก่อนในบางข้อ)
+**ข้อสังเกตที่ควรแจ้งอาจารย์**
+- **G7** แยกหน้าแบบ mount ทีละหน้า (page nav) ไม่ได้ทำเป็น URL/route แยก เพราะทั้งแอปยังไม่มี router เลย (การเลือกห้องเรียนก็เป็น state) ถ้าอาจารย์ต้องการ URL แยกจริง ๆ ต้องทำเป็นงาน routing แยกอีกงาน
+- **G6** PRD วาดเป็นปุ่มวงกลมเปล่า `( )( )( )( )( )` แต่ยังคงข้อความกำกับแต่ละระดับไว้ (ย่อขนาดลง) เพื่อไม่ให้เสีย accessibility และยังบอกความหมาย 1–5 ได้
+- **G4** เพิ่มปุ่ม Save ตาม PRD แต่ไม่ได้ถอด autosave ออก เพราะ autosave มีเทสคุมอยู่และช่วยกันคำตอบหายจริง
+
+### ยังเหลือ (ไม่บล็อก)
 
 | # | เรื่อง | แก้ที่ไหน |
 |---|---|---|
-| G4 | ไม่มีปุ่ม Save (autosave แทน) — ถ้าอาจารย์ยืนตาม PRD ต้องเพิ่มปุ่ม | `EvaluationWorkspace.tsx:104-105` |
-| G6 | layout คู่เปรียบเทียบไม่ตรง mock ของ PRD | `assets/styles.css:62-66` |
-| G7 | Group/Individual เป็น section ไม่ใช่ "หน้า" ตาม PRD §8 Screen Flow | ต้องเพิ่ม router |
 | G8 | ประวัติ reassignment ไม่โชว์ผู้สั่งย้าย + โชว์ raw ID | `frontend/src/api.ts:220-223`, `GroupReassignment.tsx:83` |
 | G9 | Individual Summary ไม่มีคอลัมน์รวม | `backend/app/export.py:30-38` |
 | G10 | Coverage table โชว์ `left_id`/`right_id` เป็นเลข ไม่ใช่ชื่อ | `frontend/src/ScoreWorkspace.tsx:24-26` |
@@ -221,4 +226,4 @@ FR-ASSIGN-05 ✅ `publish.py:26-28` (≥3 กลุ่ม), `pairing.py:110-111`
 ---
 
 *รายงานนี้สร้างจากการอ่านโค้ด (ทุกข้ออ้าง file:line) + รันเทสจริงทั้ง 7 ชุดเมื่อ 2026-10-19*
-*การตรวจรอบแรกทำบน `d2c3695` โดยไม่แก้โค้ด จากนั้นแก้ G1, G2, G3, G5 บน branch `fix-fr` แล้วรันทั้ง 7 ชุดซ้ำจนเขียวหมด 117 เทส*
+*การตรวจรอบแรกทำบน `d2c3695` โดยไม่แก้โค้ด จากนั้นแก้ G1–G7 บน branch `fix-fr` แล้วรันทั้ง 7 ชุดซ้ำจนเขียวหมด 117 เทส*
