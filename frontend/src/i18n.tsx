@@ -33,6 +33,7 @@ const th: Record<string, string> = {
   'Strongly left': 'ซ้ายดีกว่ามาก', 'Slightly left': 'ซ้ายดีกว่าเล็กน้อย', 'Equal': 'เท่ากัน',
   'Slightly right': 'ขวาดีกว่าเล็กน้อย', 'Strongly right': 'ขวาดีกว่ามาก',
   'Progress': 'ความคืบหน้า', 'saved': 'บันทึกแล้ว', 'Last submitted': 'ส่งครั้งล่าสุด',
+  'Deadline has passed.': 'เลยกำหนดส่งแล้ว',
   'Not set': 'ยังไม่กำหนด', 'No pairs assigned for this section.': 'ยังไม่มีคู่ประเมินในส่วนนี้',
   'Submit saved answers': 'ส่งคำตอบที่บันทึก', 'Draft saved.': 'บันทึกร่างแล้ว',
   'Submit all currently saved answers for this section?': 'ส่งคำตอบที่บันทึกทั้งหมดในส่วนนี้หรือไม่?',
