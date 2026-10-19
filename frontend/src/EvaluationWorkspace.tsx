@@ -7,6 +7,7 @@ import { Button } from './components/ui/button'
 import { Alert, AlertDescription } from './components/ui/alert'
 import { useEvaluationDraft } from './useEvaluationDraft'
 import { ToastNotice, useNotice } from './components/ui/toast'
+import { DisclosureSummary } from './components/ui/disclosure-summary'
 
 const choices = ['Strongly left', 'Slightly left', 'Equal', 'Slightly right', 'Strongly right']
 
@@ -60,7 +61,7 @@ export function EvaluationWorkspace({ assignmentId, section, initiallyOpen = tru
   }
 
   return <details open={opened} onToggle={(event) => { setOpened(event.currentTarget.open); if (event.currentTarget.open) setActivated(true) }} className="evaluation-section mt-3 rounded-xl border border-slate-200 text-sm">
-    <summary className="evaluation-section-summary">{t(section === 'group' ? 'Group evaluation' : 'Individual evaluation')}<span>{page ? `${page.pairs.filter((pair) => pair.draft_choice != null).length}/${page.pairs.length} ${saveLabel}` : ''}</span></summary>
+    <DisclosureSummary className="evaluation-section-summary">{t(section === 'group' ? 'Group evaluation' : 'Individual evaluation')}<span>{page ? `${page.pairs.filter((pair) => pair.draft_choice != null).length}/${page.pairs.length} ${saveLabel}` : ''}</span></DisclosureSummary>
     <div className="evaluation-section-content">
     <h3 className="sr-only">{t(section === 'group' ? 'Group evaluation' : 'Individual evaluation')}</h3>
     {resource.loading && <p role="status">{language === 'th' ? 'กำลังโหลดแบบประเมิน...' : 'Loading evaluation...'}</p>}

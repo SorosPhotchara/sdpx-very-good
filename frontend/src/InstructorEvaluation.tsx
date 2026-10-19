@@ -7,14 +7,19 @@ import { useLanguage } from './i18n'
 import { useResource } from './useResource'
 import { useAsyncLock } from './useAsyncLock'
 import { ToastNotice, useNotice } from './components/ui/toast'
+import { Button } from './components/ui/button'
+import { Input } from './components/ui/input'
+import { DisclosureSummary } from './components/ui/disclosure-summary'
 
 const choices = ['Strongly left', 'Slightly left', 'Equal', 'Slightly right', 'Strongly right']
+const pageSize = 8
+const pairKey = (criterionId: number, leftId: number, rightId: number) => `${criterionId}:${Math.min(leftId, rightId)}:${Math.max(leftId, rightId)}`
 
 export function InstructorEvaluation(props: { assignmentId: number; classroomId: number; email: string }) {
   const { t } = useLanguage()
   const [activated, setActivated] = useState(false)
   return <details onToggle={(event) => { if (event.currentTarget.open) setActivated(true) }} className="mt-4 border-t border-slate-200 pt-4 text-sm">
-    <summary className="cursor-pointer font-medium">{t('Instructor pairwise evaluation')}</summary>
+    <DisclosureSummary className="font-medium">{t('Instructor pairwise evaluation')}</DisclosureSummary>
     {activated && <InstructorEvaluationContent key={`${props.assignmentId}:${props.classroomId}`} {...props} />}
   </details>
 }
@@ -32,6 +37,13 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
   })
   const { criteria = [], groups = [], students = [], pairs = [], report, rawPairs = [] } = resource.data ?? {}
   const [criterionId, setCriterionId] = useState(0)
+  const [section, setSection] = useState<'group' | 'individual'>('group')
+  const [groupId, setGroupId] = useState(0)
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(0)
+  const [evaluationPage, setEvaluationPage] = useState(0)
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
+  const [batchProgress, setBatchProgress] = useState(0)
   const [leftId, setLeftId] = useState(0)
   const [rightId, setRightId] = useState(0)
   const [studentId, setStudentId] = useState(0)
@@ -39,7 +51,12 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
   const [savingPairIds, setSavingPairIds] = useState<Set<number>>(() => new Set())
   const pendingVotes = useRef(new Set<number>())
   const action = useAsyncLock()
-  useEffect(() => { if (resource.data) setCriterionId((current) => current || resource.data?.criteria[0]?.id || 0) }, [resource.data])
+  useEffect(() => {
+    if (!resource.data) return
+    const firstGroup = resource.data.criteria.find((item) => item.is_group)
+    if (!firstGroup) setSection('individual')
+    setCriterionId((current) => current || firstGroup?.id || resource.data?.criteria[0]?.id || 0)
+  }, [resource.data])
   function updateChoice(pairId: number, choice: number | null) {
     resource.setData((current) => current ? { ...current, pairs: current.pairs.map((pair) => pair.pair_id === pairId ? { ...pair, choice } : pair) } : current)
   }
@@ -51,12 +68,23 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
   const itemLabel = (item: typeof selectedLeft) => item ? ('email' in item ? item.display_name || item.email : item.name) : ''
   const selectedLeftLabel = itemLabel(selectedLeft)
   const selectedRightLabel = itemLabel(selectedRight)
-  const currentInstructorPair = pairs.find((pair) =>
-    pair.section === (criterion?.is_group ? 'group' : 'individual')
-    && pair.criterion === criterion?.name
-    && ((pair.left === selectedLeftLabel && pair.right === selectedRightLabel)
-      || (pair.left === selectedRightLabel && pair.right === selectedLeftLabel)),
-  )
+  const assignedKeys = new Set(rawPairs.filter((pair) => pair.evaluator_student_id === null && pair.evaluator.toLowerCase() === email.toLowerCase())
+    .map((pair) => pairKey(pair.criterion_id, pair.left_id, pair.right_id)))
+  const rawById = new Map(rawPairs.map((pair) => [pair.pair_id, pair]))
+  const activeCriteria = criteria.filter((item) => item.is_group === (section === 'group'))
+  const visibleRows = (report?.coverage ?? []).filter((row) => {
+    if (row.section !== section || row.criterion_id !== criterionId) return false
+    const leftStudent = students.find((item) => item.id === row.left_id)
+    if (section === 'individual' && groupId && leftStudent?.group_id !== groupId) return false
+    const left = section === 'group' ? groups.find((item) => item.id === row.left_id)?.name : leftStudent?.email
+    const right = section === 'group' ? groups.find((item) => item.id === row.right_id)?.name : students.find((item) => item.id === row.right_id)?.email
+    return `${left} ${right}`.toLocaleLowerCase().includes(query.toLocaleLowerCase().trim())
+  })
+  const availableRows = visibleRows.filter((row) => !assignedKeys.has(pairKey(row.criterion_id, row.left_id, row.right_id)))
+  const selectedRows = availableRows.filter((row) => selectedKeys.has(pairKey(row.criterion_id, row.left_id, row.right_id)))
+  const pageCount = Math.max(1, Math.ceil(visibleRows.length / pageSize))
+  const pageRows = visibleRows.slice(page * pageSize, (page + 1) * pageSize)
+  const sectionClosed = section === 'group' ? report?.group_final : report?.individual_final
   const assignedStudentIds = new Set(rawPairs.filter((pair) =>
     pair.criterion_id === criterionId
     && ((pair.left_id === leftId && pair.right_id === rightId)
@@ -72,30 +100,51 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
     return left?.group_id !== null && left?.group_id === right?.group_id
       && student.group_id === left?.group_id && student.id !== leftId && student.id !== rightId
   })
-  const coverageGaps = report?.coverage.filter((row) => row.missing_to_target > 0 || row.shortage_to_five > 0) ?? []
-  const belowTarget = coverageGaps.filter((row) => row.missing_to_target > 0).length
-  const eligibilityShortage = coverageGaps.filter((row) => row.shortage_to_five > 0).length
-  const groupedPairs = Object.values(pairs.reduce<Record<string, { section: string; criterion: string; pairs: typeof pairs }>>((groups, pair) => {
+  const assignedInView = pairs.filter((pair) => {
+    const raw = rawById.get(pair.pair_id)
+    return pair.section === section && raw?.criterion_id === criterionId
+      && (section === 'group' || !groupId || students.some((student) => student.id === raw.left_id && student.group_id === groupId))
+  })
+  const evaluationPageCount = Math.max(1, Math.ceil(assignedInView.length / pageSize))
+  const groupedPairs = Object.values(assignedInView.slice(evaluationPage * pageSize, (evaluationPage + 1) * pageSize)
+    .reduce<Record<string, { section: string; criterion: string; pairs: typeof pairs }>>((groups, pair) => {
     const key = `${pair.section}:${pair.criterion}`
     groups[key] ??= { section: pair.section, criterion: pair.criterion, pairs: [] }
     groups[key].pairs.push(pair)
     return groups
   }, {}))
 
-  async function assign(target: 'instructor' | 'student') {
+  async function assignSelected() {
+    if (!selectedRows.length || !action.begin()) return
+    let completed = 0
+    const failed: typeof selectedRows = []
+    try {
+      for (let index = 0; index < selectedRows.length; index += 4) {
+        const chunk = selectedRows.slice(index, index + 4)
+        const results = await Promise.allSettled(chunk.map((row) => addInstructorPair(assignmentId, {
+          criteria_id: row.criterion_id, left_id: row.left_id, right_id: row.right_id, instructor_email: email,
+        })))
+        results.forEach((result, offset) => { if (result.status === 'fulfilled') completed += 1; else failed.push(chunk[offset]) })
+        setBatchProgress(Math.min(index + chunk.length, selectedRows.length))
+      }
+      await resource.refresh()
+      setSelectedKeys(new Set(failed.map((row) => pairKey(row.criterion_id, row.left_id, row.right_id))))
+      setMessage(language === 'th' ? `มอบหมายสำเร็จ ${completed} คู่${failed.length ? ` · ไม่สำเร็จ ${failed.length} คู่` : ''}` : `Assigned ${completed} pairs${failed.length ? ` · ${failed.length} failed` : ''}`, failed.length ? 'error' : 'success')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not refresh assigned pairs.', 'error')
+    } finally {
+      setBatchProgress(0)
+      action.finish()
+    }
+  }
+
+  async function assignStudent() {
     if (!action.begin()) return
     try {
-      if (target === 'instructor') {
-        await addInstructorPair(assignmentId, { criteria_id: criterionId, left_id: leftId, right_id: rightId, instructor_email: email })
-        const assigned = await getInstructorPairs(assignmentId)
-        resource.setData((current) => current ? { ...current, pairs: assigned } : current)
-        setMessage(t('Instructor pair assigned.'))
-      } else {
-        await addStudentPair(assignmentId, { criteria_id: criterionId, left_id: leftId, right_id: rightId, student_id: studentId })
-        setStudentId(0)
-        await resource.refresh()
-        setMessage(language === 'th' ? 'ส่งคู่ประเมินเพิ่มให้นักศึกษาแล้ว' : 'Extra pair assigned to student.')
-      }
+      await addStudentPair(assignmentId, { criteria_id: criterionId, left_id: leftId, right_id: rightId, student_id: studentId })
+      setStudentId(0)
+      await resource.refresh()
+      setMessage(language === 'th' ? 'ส่งคู่ประเมินเพิ่มให้นักศึกษาแล้ว' : 'Extra pair assigned to student.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not assign pair.', 'error')
     } finally {
@@ -124,72 +173,64 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
   return <div>
     {resource.loading && <p role="status">{language === 'th' ? 'กำลังโหลดการประเมินของอาจารย์...' : 'Loading instructor evaluation...'}</p>}
     {resource.error && <div role="alert">{resource.error} <button type="button" onClick={() => void resource.refresh()}>{t('Retry')}</button></div>}
-    <div className="instructor-pair-controls mt-2 flex flex-wrap items-center gap-2">
-      <select aria-label={t('Criterion')} value={criterionId} onChange={(event) => { setCriterionId(Number(event.target.value)); setLeftId(0); setRightId(0); setStudentId(0) }} className="rounded border p-2">
-        <option value={0}>{t('Choose criterion')}</option>
-        {criteria.map((item) => <option key={item.id} value={item.id}>{t(item.is_group ? 'Group' : 'Individual')}: {item.name}</option>)}
-      </select>
-      {(['left', 'right'] as const).map((side) => <select key={side} aria-label={t(side + ' item')} value={side === 'left' ? leftId : rightId}
-        onChange={(event) => { if (side === 'left') setLeftId(Number(event.target.value)); else setRightId(Number(event.target.value)); setStudentId(0) }}
-        className="rounded border p-2">
-        <option value={0}>{t(side + ' item')}</option>
-        {candidates.map((item) => <option key={item.id} value={item.id}>{'email' in item ? item.email : item.name}</option>)}
-      </select>)}
-      <button type="button" data-testid="assign-instructor-pair" disabled={action.busy || resource.loading || !criterionId || !leftId || !rightId || leftId === rightId || Boolean(currentInstructorPair)} aria-busy={action.busy} onClick={() => void assign('instructor')}
-        className={currentInstructorPair ? 'min-h-11 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 font-semibold text-primary disabled:opacity-100' : 'min-h-11 rounded-md bg-primary px-3 py-2 font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50'}>
-        {action.busy ? t('Working...') : currentInstructorPair ? (language === 'th' ? 'มอบหมายให้ฉันแล้ว' : 'Already assigned to me') : t('Assign to me')}
-      </button>
-      <select aria-label={language === 'th' ? 'นักศึกษาผู้ประเมิน' : 'Student evaluator'} value={studentId}
-        onChange={(event) => setStudentId(Number(event.target.value))} className="rounded border p-2">
-        <option value={0}>{eligibleStudents.length === 0 && leftId && rightId && leftId !== rightId
-          ? (language === 'th' ? 'ไม่มีนักศึกษาผู้ประเมินที่ยังไม่เคยได้คู่นี้' : 'No unused eligible student evaluators')
-          : (language === 'th' ? 'เลือกนักศึกษาผู้ประเมิน' : 'Choose student evaluator')}</option>
-        {eligibleStudents.map((student) => <option key={student.id} value={student.id}>{student.email}</option>)}
-      </select>
-      <button type="button" data-testid="assign-student-pair" disabled={action.busy || resource.loading || !studentId || !eligibleStudents.some((student) => student.id === studentId)}
-        aria-busy={action.busy} onClick={() => void assign('student')}
-        className="rounded bg-blue-600 px-3 py-2 text-white disabled:opacity-50">{language === 'th' ? 'ส่งคู่เพิ่มให้นักศึกษา' : 'Assign extra pair to student'}</button>
-    </div>
-    <p className="mt-2 text-slate-600">{language === 'th' ? 'นักศึกษาหนึ่งคนประเมินคู่เดียวกันได้หนึ่งครั้ง หากมอบหมายแล้วให้เลือกคนอื่น' : 'Each student counts once per pair. Choose another evaluator if this pair is already assigned to them.'}</p>
-    {criterion && leftId && rightId && leftId !== rightId && <div className={currentInstructorPair ? 'mt-3 rounded-lg border border-primary/25 bg-primary/10 p-3 text-sm text-foreground' : 'mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-foreground'} role="status" aria-live="polite" data-testid="instructor-pair-selection-status">
-      <strong>{currentInstructorPair ? (language === 'th' ? 'คู่นี้มอบหมายให้คุณแล้ว' : 'This pair is assigned to you') : (language === 'th' ? 'คู่ที่เลือก' : 'Selected pair')}</strong>
-      <span className="ml-2">{criterion.name}: {selectedLeftLabel} vs {selectedRightLabel}</span>
-      {!currentInstructorPair && <p className="mt-1 text-xs text-muted-foreground">{language === 'th' ? 'กด “กำหนดให้ฉัน” เพื่อเพิ่มคู่นี้ในรายการงานของคุณ' : 'Select “Assign to me” to add this pair to your assigned work.'}</p>}
-    </div>}
-    {coverageGaps.length > 0 && <div className="mt-3 rounded border p-2 text-sm">
-      <strong>{language === 'th' ? `คู่ที่ยังขาดคำตอบตามเป้าหมาย ${belowTarget} คู่ · คู่ที่ผู้มีสิทธิ์ไม่ครบ 5 คน ${eligibilityShortage} คู่` : `${belowTarget} pairs below feasible submitted target · ${eligibilityShortage} pairs have fewer than five eligible evaluators`}</strong>
-      <div className="mt-2 max-h-64 space-y-2 overflow-y-auto pr-1">
-        {coverageGaps.map((row) => {
-          const leftStudent = row.section === 'group' ? undefined : students.find((item) => item.id === row.left_id)
-          const rightStudent = row.section === 'group' ? undefined : students.find((item) => item.id === row.right_id)
-          const left = row.section === 'group' ? groups.find((item) => item.id === row.left_id)?.name : leftStudent?.display_name || leftStudent?.email
-          const right = row.section === 'group' ? groups.find((item) => item.id === row.right_id)?.name : rightStudent?.display_name || rightStudent?.email
-          const assignedPair = pairs.find((pair) => pair.section === row.section && pair.criterion === row.criterion
-            && ((pair.left === left && pair.right === right) || (pair.left === right && pair.right === left)))
-          const selected = criterionId === row.criterion_id
-            && ((leftId === row.left_id && rightId === row.right_id) || (leftId === row.right_id && rightId === row.left_id))
-          const unassigned = Math.max(0, row.target_evaluations - row.assigned_evaluators)
-          const awaitingSubmission = Math.max(0, row.assigned_evaluators - row.votes)
-          return <div key={`${row.criterion_id}:${row.left_id}:${row.right_id}`} className={selected ? 'rounded-md border border-primary/40 bg-primary/5 p-2.5' : 'rounded-md border border-border bg-background p-2.5'}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <strong className="min-w-0 break-words">{row.criterion}: {left} / {right}</strong>
-              {assignedPair && <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">{language === 'th' ? 'มอบหมายให้ฉันแล้ว' : 'Assigned to me'}</span>}
-            </div>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">{language === 'th' ? `ส่งแล้ว ${row.votes}/${row.target_evaluations} · ยังไม่มอบหมาย ${unassigned} · มอบหมายแล้วแต่ยังไม่ส่ง ${awaitingSubmission} · ผู้มีสิทธิ์ขาดจาก 5 อีก ${row.shortage_to_five}` : `submitted ${row.votes}/${row.target_evaluations} · not assigned ${unassigned} · assigned but not submitted ${awaitingSubmission} · eligible shortage to five ${row.shortage_to_five}`}</p>
-            <button type="button" aria-pressed={selected} className={selected ? 'mt-2 min-h-10 rounded-md border border-primary bg-primary/10 px-3 py-1.5 font-semibold text-primary' : 'mt-2 min-h-10 rounded-md border border-border bg-background px-3 py-1.5 text-foreground hover:bg-muted'} onClick={() => {
-              setCriterionId(row.criterion_id); setLeftId(row.left_id); setRightId(row.right_id); setStudentId(0)
-              if (assignedPair) document.getElementById('instructor-assigned-pairs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }}>{assignedPair ? (language === 'th' ? 'ดูงานของฉัน' : 'View my task') : selected ? (language === 'th' ? 'เลือกคู่นี้แล้ว' : 'Selected') : (language === 'th' ? 'เลือกคู่นี้' : 'Select pair')}</button>
-          </div>
+    <div className="mt-4 space-y-4" data-testid="instructor-pair-planner">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={language === 'th' ? 'ประเภทการประเมิน' : 'Evaluation type'}>
+        {(['group', 'individual'] as const).map((mode) => <Button key={mode} type="button" variant={section === mode ? 'default' : 'outline'} aria-pressed={section === mode}
+          onClick={() => { setSection(mode); setCriterionId(criteria.find((item) => item.is_group === (mode === 'group'))?.id || 0); setLeftId(0); setRightId(0); setGroupId(0); setQuery(''); setPage(0); setEvaluationPage(0); setSelectedKeys(new Set()) }}>
+          {t(mode === 'group' ? 'Group evaluation' : 'Individual evaluation')} <span className="opacity-70">{report?.coverage.filter((row) => row.section === mode).length ?? 0}</span>
+        </Button>)}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]">
+        <select aria-label={t('Criterion')} value={criterionId} onChange={(event) => { setCriterionId(Number(event.target.value)); setLeftId(0); setRightId(0); setPage(0); setEvaluationPage(0); setSelectedKeys(new Set()) }} className="min-h-10 min-w-0 rounded-lg border border-input bg-background px-3 text-sm">
+          {activeCriteria.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>
+        {section === 'individual' && <select aria-label={language === 'th' ? 'กรองตามกลุ่ม' : 'Filter by group'} value={groupId} onChange={(event) => { setGroupId(Number(event.target.value)); setPage(0); setSelectedKeys(new Set()) }} className="min-h-10 min-w-0 rounded-lg border border-input bg-background px-3 text-sm">
+          <option value={0}>{language === 'th' ? 'ทุกกลุ่ม' : 'All groups'}</option>
+          {groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>}
+        <Input type="search" aria-label={language === 'th' ? 'ค้นหาคู่ประเมิน' : 'Search pairs'} placeholder={language === 'th' ? 'ค้นหาชื่อกลุ่มหรืออีเมล' : 'Search groups or email'} value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); setSelectedKeys(new Set()) }} className={section === 'group' ? 'sm:col-span-1 lg:col-start-3' : ''} />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+        <p className="text-sm text-muted-foreground">{language === 'th' ? `${visibleRows.length} คู่ในรายการ · มอบหมายให้ฉันแล้ว ${visibleRows.length - availableRows.length} คู่` : `${visibleRows.length} pairs · ${visibleRows.length - availableRows.length} assigned to me`}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" disabled={action.busy || sectionClosed || !availableRows.length} onClick={() => setSelectedKeys(new Set(availableRows.map((row) => pairKey(row.criterion_id, row.left_id, row.right_id))))}>{language === 'th' ? 'เลือกคู่ที่ยังไม่ได้ทั้งหมด' : 'Select all unassigned'}</Button>
+          {selectedRows.length > 0 && <Button type="button" variant="ghost" size="sm" disabled={action.busy} onClick={() => setSelectedKeys(new Set())}>{language === 'th' ? 'ล้างที่เลือก' : 'Clear'}</Button>}
+          <Button type="button" size="sm" data-testid="assign-instructor-pair" disabled={action.busy || sectionClosed || !selectedRows.length} aria-busy={action.busy} onClick={() => void assignSelected()}>{action.busy ? `${batchProgress}/${selectedRows.length}` : language === 'th' ? `มอบหมายให้ฉัน ${selectedRows.length} คู่` : `Assign ${selectedRows.length} to me`}</Button>
+        </div>
+      </div>
+      {sectionClosed && <p className="text-sm text-amber-800" role="status">{language === 'th' ? 'หมดกำหนดประเมินแล้ว จึงมอบหมายคู่เพิ่มไม่ได้' : 'The deadline has passed; no more pairs can be assigned.'}</p>}
+      <div className="divide-y divide-border rounded-xl border border-border bg-background">
+        {pageRows.length === 0 && <p className="p-4 text-muted-foreground">{language === 'th' ? 'ไม่พบคู่ประเมินในตัวกรองนี้' : 'No pairs match these filters.'}</p>}
+        {pageRows.map((row) => {
+          const key = pairKey(row.criterion_id, row.left_id, row.right_id)
+          const assigned = assignedKeys.has(key)
+          const left = row.section === 'group' ? groups.find((item) => item.id === row.left_id)?.name : students.find((item) => item.id === row.left_id)?.email
+          const right = row.section === 'group' ? groups.find((item) => item.id === row.right_id)?.name : students.find((item) => item.id === row.right_id)?.email
+          return <label key={key} className={`flex cursor-pointer items-start gap-3 p-3 sm:items-center ${assigned ? 'bg-slate-50/70' : 'hover:bg-indigo-50/50'}`}>
+            <input type="checkbox" checked={assigned || selectedKeys.has(key)} disabled={assigned || action.busy || sectionClosed} onChange={(event) => setSelectedKeys((current) => { const next = new Set(current); if (event.target.checked) next.add(key); else next.delete(key); return next })} className="mt-1 size-4 shrink-0 accent-primary sm:mt-0" aria-label={`${left} / ${right}`} />
+            <span className="min-w-0 flex-1"><span className="block break-words font-medium text-foreground">{left} <span className="px-1 text-muted-foreground">vs</span> {right}</span><span className="block text-xs text-muted-foreground">{language === 'th' ? `นักศึกษาส่งแล้ว ${row.votes}/${row.target_evaluations}` : `Student responses ${row.votes}/${row.target_evaluations}`}{row.shortage_to_five > 0 ? (language === 'th' ? ` · ผู้มีสิทธิ์ไม่ครบ 5 คน` : ` · fewer than 5 eligible`) : ''}</span></span>
+            {assigned && <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">{language === 'th' ? 'มอบหมายแล้ว' : 'Assigned'}</span>}
+          </label>
         })}
       </div>
-    </div>}
+      {pageCount > 1 && <div className="flex items-center justify-end gap-2"><Button type="button" variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>{language === 'th' ? 'ก่อนหน้า' : 'Previous'}</Button><span className="text-xs text-muted-foreground">{page + 1}/{pageCount}</span><Button type="button" variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage(page + 1)}>{language === 'th' ? 'ถัดไป' : 'Next'}</Button></div>}
+    </div>
+    <details className="mt-4 rounded-xl border border-border p-3 text-sm">
+      <DisclosureSummary className="font-medium text-foreground">{language === 'th' ? 'ส่งคู่เพิ่มให้นักศึกษา' : 'Assign an extra pair to a student'}</DisclosureSummary>
+      <p className="mt-2 text-muted-foreground">{language === 'th' ? 'นักศึกษาหนึ่งคนประเมินคู่เดียวกันได้หนึ่งครั้ง' : 'Each student can evaluate a pair once.'}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {(['left', 'right'] as const).map((side) => <select key={side} aria-label={t(side + ' item')} value={side === 'left' ? leftId : rightId} onChange={(event) => { if (side === 'left') setLeftId(Number(event.target.value)); else setRightId(Number(event.target.value)); setStudentId(0) }} className="min-h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm"><option value={0}>{t(side + ' item')}</option>{candidates.map((item) => <option key={item.id} value={item.id}>{'email' in item ? item.email : item.name}</option>)}</select>)}
+        <select aria-label={language === 'th' ? 'นักศึกษาผู้ประเมิน' : 'Student evaluator'} value={studentId} onChange={(event) => setStudentId(Number(event.target.value))} className="min-h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm"><option value={0}>{language === 'th' ? 'เลือกนักศึกษาผู้ประเมิน' : 'Choose student evaluator'}</option>{eligibleStudents.map((student) => <option key={student.id} value={student.id}>{student.email}</option>)}</select>
+        <Button type="button" data-testid="assign-student-pair" disabled={action.busy || !studentId || !eligibleStudents.some((student) => student.id === studentId)} onClick={() => void assignStudent()}>{language === 'th' ? 'ส่งคู่ให้นักศึกษา' : 'Assign to student'}</Button>
+      </div>
+      {criterion && leftId && rightId && leftId !== rightId && <p className="mt-2 text-muted-foreground" data-testid="instructor-pair-selection-status">{criterion.name}: {selectedLeftLabel} vs {selectedRightLabel}</p>}
+    </details>
     <section id="instructor-assigned-pairs" tabIndex={-1} aria-labelledby="instructor-assigned-heading" data-testid="instructor-assigned-pairs" className="mt-6 scroll-mt-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-        <div><h3 id="instructor-assigned-heading" className="font-semibold text-slate-900">{language === 'th' ? 'คู่ประเมินที่มอบหมายให้ฉัน' : 'Pairs assigned to me'}</h3><p className="mt-1 text-xs text-slate-500">{language === 'th' ? 'รายการนี้เป็นงานของบัญชีอาจารย์ที่กำลังใช้งาน' : 'These pairs belong to the instructor account you are using.'}</p></div>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-sm font-semibold text-slate-700" aria-label={language === 'th' ? `${pairs.length} คู่ที่มอบหมายให้ฉัน` : `${pairs.length} pairs assigned to me`}>{pairs.length}</span>
+        <div><h3 id="instructor-assigned-heading" className="font-semibold text-slate-900">{language === 'th' ? 'คู่ประเมินที่มอบหมายให้ฉัน' : 'Pairs assigned to me'}</h3><p className="mt-1 text-xs text-slate-500">{language === 'th' ? `เกณฑ์ ${criterion?.name || '—'} · รอประเมิน ${assignedInView.filter((pair) => pair.choice === null).length} คู่` : `${criterion?.name || '—'} · ${assignedInView.filter((pair) => pair.choice === null).length} awaiting evaluation`}</p></div>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-sm font-semibold text-slate-700" aria-label={language === 'th' ? `${assignedInView.length} คู่ที่มอบหมายให้ฉันในรายการนี้` : `${assignedInView.length} pairs assigned to me in this view`}>{assignedInView.length}</span>
       </div>
-      {pairs.length === 0
+      {assignedInView.length === 0
         ? <p className="border-t border-slate-200 py-4 text-sm text-muted-foreground">{t('No instructor pairs assigned')}</p>
         : <div className="space-y-5">{groupedPairs.map((group) => <section key={`${group.section}:${group.criterion}`} aria-label={`${group.section} ${group.criterion}`} className="border-t border-slate-200 pt-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -214,6 +255,7 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
             </fieldset>
           </div>)}</div>
         </section>)}</div>}
+      {evaluationPageCount > 1 && <div className="mt-4 flex items-center justify-end gap-2"><Button type="button" variant="outline" size="sm" disabled={evaluationPage === 0} onClick={() => setEvaluationPage(evaluationPage - 1)}>{language === 'th' ? 'ก่อนหน้า' : 'Previous'}</Button><span className="text-xs text-muted-foreground">{evaluationPage + 1}/{evaluationPageCount}</span><Button type="button" variant="outline" size="sm" disabled={evaluationPage + 1 >= evaluationPageCount} onClick={() => setEvaluationPage(evaluationPage + 1)}>{language === 'th' ? 'ถัดไป' : 'Next'}</Button></div>}
     </section>
     <ToastNotice notice={message} />
   </div>
