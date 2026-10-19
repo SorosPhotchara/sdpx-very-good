@@ -56,6 +56,10 @@ test('countdown, per-criterion submitted progress, unevaluated warning and inter
   await expect(evaluation.getByText('Draft saved.', { exact: true })).toBeVisible()
   await expect(progress).toContainText(/0 \/ \d+ pairs submitted/)
 
+  // FR-EVAL-04: an explicit Save control stores the draft and confirms it.
+  await evaluation.getByTestId('save-draft').click()
+  await expect(evaluation.getByText('Draft saved.', { exact: true })).toBeVisible()
+
   // The confirmation names how many pairs are still unevaluated before submitting.
   await evaluation.getByRole('button', { name: 'Submit saved answers', exact: true }).click()
   await expect(evaluation.getByTestId('unanswered-warning')).toContainText(/Warning: \d+ of \d+ pairs are still unevaluated/)
@@ -71,4 +75,14 @@ test('countdown, per-criterion submitted progress, unevaluated warning and inter
   await expect(finality).toContainText('Individual: Interim — may change')
   const mine = await request.get(`${api}/assignments/${assignmentId}/my-scores`, { headers: { Authorization: 'Bearer mock:student1@example.edu' } })
   expect(await mine.json()).toMatchObject({ group_final: false, individual_final: false })
+
+  // FR-EVAL-01 / FR-EVAL-07: one evaluation page at a time, switched by the page nav.
+  await expect(page.getByRole('heading', { name: 'Individual evaluation', exact: true })).toHaveCount(0)
+  await page.getByTestId('evaluation-page-individual').click()
+  await expect(page.getByRole('heading', { name: 'Individual evaluation', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('heading', { name: 'Group evaluation', exact: true })).toHaveCount(0)
+  await expect(page.getByTestId('evaluation-page-individual')).toHaveAttribute('aria-pressed', 'true')
+  await page.getByTestId('evaluation-page-group').click()
+  await expect(page.getByRole('heading', { name: 'Group evaluation', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('heading', { name: 'Individual evaluation', exact: true })).toHaveCount(0)
 })

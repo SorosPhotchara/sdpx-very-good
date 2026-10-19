@@ -20,8 +20,10 @@ export function useEvaluationDraft(assignmentId: number, section: string,
     return () => { generation.current++ }
   }, [assignmentId, section])
 
-  async function flush() {
-    if (running.current || !pending.current.size) return
+  // Resolves true when every pending choice is stored, so an explicit Save can report honestly.
+  async function flush(): Promise<boolean> {
+    if (running.current) return false
+    if (!pending.current.size) return !failed
     const requestGeneration = generation.current
     running.current = true
     setSaving(true)
@@ -31,7 +33,7 @@ export function useEvaluationDraft(assignmentId: number, section: string,
         const batch = new Map(pending.current)
         const updated = await saveEvaluationDraft(assignmentId, section,
           [...batch].map(([pair_id, choice]) => ({ pair_id, choice })))
-        if (requestGeneration !== generation.current) return
+        if (requestGeneration !== generation.current) return false
         for (const [id, choice] of batch) {
           if (pending.current.get(id) === choice) pending.current.delete(id)
         }
@@ -39,11 +41,13 @@ export function useEvaluationDraft(assignmentId: number, section: string,
           ? { ...pair, draft_choice: pending.current.get(pair.id)! } : pair) })
       }
       callbacks.current.onSaved()
+      return true
     } catch (error) {
-      if (requestGeneration !== generation.current) return
+      if (requestGeneration !== generation.current) return false
       // Retain unsaved edits for an explicit retry; never claim they were saved.
       setFailed(true)
       callbacks.current.onError(error instanceof Error ? error.message : 'Draft could not be saved.')
+      return false
     } finally {
       if (requestGeneration === generation.current) {
         running.current = false
@@ -59,5 +63,5 @@ export function useEvaluationDraft(assignmentId: number, section: string,
     void flush()
   }
 
-  return { choose, saving, failed, retry: () => void flush() }
+  return { choose, saving, failed, retry: () => void flush(), save: flush }
 }

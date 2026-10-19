@@ -205,12 +205,13 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
             <fieldset disabled={!pair.is_open || savingPairIds.has(pair.pair_id)} className="evaluation-pair !mt-0 !border-0 !bg-transparent !p-0">
               <legend className="sr-only">{group.criterion}: {pair.left} vs {pair.right}</legend>
               <div className="pair-candidates">
-                <span>{pair.left}</span><span className="pair-versus" aria-hidden="true">VS</span><span>{pair.right}</span>
+                <span className="pair-side">{pair.left}</span>
+                <div className="choice-scale">{choices.map((label, index) => <label key={label} className="choice-option" title={t(label)}>
+                  <input type="radio" name={`instructor-pair-${pair.pair_id}`} checked={pair.choice === index + 1}
+                    onChange={() => void vote(pair.pair_id, index + 1)} /><span>{t(label)}</span>
+                </label>)}</div>
+                <span className="pair-side pair-side-right">{pair.right}</span>
               </div>
-              <div className="choice-scale">{choices.map((label, index) => <label key={label} className="choice-option">
-                <input type="radio" name={`instructor-pair-${pair.pair_id}`} checked={pair.choice === index + 1}
-                  onChange={() => void vote(pair.pair_id, index + 1)} /><span>{t(label)}</span>
-              </label>)}</div>
             </fieldset>
           </div>)}</div>
         </section>)}</div>}

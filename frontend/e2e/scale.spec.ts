@@ -33,7 +33,7 @@ test('200 students: evaluation rendering, deferred reports and concurrent reads'
   const renderMs = Date.now() - started
   expect(renderMs).toBeLessThan(2000)
   expect(reads.some(url => /\/report$|\/scores\/me$|\/evaluation\/individual$/.test(url))).toBe(false)
-  await page.locator('summary').filter({ hasText: 'Individual evaluation' }).click()
+  await page.getByTestId('evaluation-page-individual').click()
   await expect(page.getByRole('heading', { name: 'Individual evaluation', exact: true }).locator('..').locator('input[type=radio]').first()).toBeVisible()
   const latencies = await Promise.all(Array.from({ length: 20 }, async (_, i) => {
     const start = Date.now()
