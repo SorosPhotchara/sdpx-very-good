@@ -8,7 +8,7 @@ import {
   createAssignment, getAssignments, getAssignmentSetup, previewAssignment, publishAssignment, updateAssignmentSetup,
   type Assignment, type AssignmentSetup, type PairPreview, type PairPreviewItem,
 } from './api'
-import { EvaluationWorkspace } from './EvaluationWorkspace'
+import { StudentEvaluationPages } from './EvaluationWorkspace'
 import { ScoreWorkspace } from './ScoreWorkspace'
 import { InstructorEvaluation } from './InstructorEvaluation'
 import { useLanguage } from './i18n'
@@ -247,10 +247,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
         {assignment.published_at && <span className="text-primary">{t('Published')}</span>}
       </span>}
       {isInstructor && pairPreviews[assignment.id] && <div id={`pair-preview-${assignment.id}`}><PairPreviewPanel preview={pairPreviews[assignment.id]} /></div>}
-      {!isInstructor && <>
-        <EvaluationWorkspace assignmentId={assignment.id} section="group" initiallyOpen={index === 0} />
-        <EvaluationWorkspace assignmentId={assignment.id} section="individual" />
-      </>}
+      {!isInstructor && <StudentEvaluationPages assignmentId={assignment.id} initiallyOpen={index === 0} />}
       <ScoreWorkspace assignmentId={assignment.id} isInstructor={isInstructor} />
       {isInstructor && assignment.published_at && <InstructorEvaluation assignmentId={assignment.id} classroomId={classroomId} email={email} />}
     </div>)}

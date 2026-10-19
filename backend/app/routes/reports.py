@@ -65,7 +65,11 @@ def read_my_scores(
         raise HTTPException(403, "Classroom membership required")
     report = assignment_report(db, assignment)
     row = next((row for row in report["students"] if row["email"] == identity.email), None)
-    return row
+    if row is None:
+        raise HTTPException(404, "Scores not found")
+    # The student view needs the same interim/final state the instructor report carries,
+    # so the page can label rolling scores before each section's deadline.
+    return {**row, "group_final": report["group_final"], "individual_final": report["individual_final"]}
 
 
 @router.get("/assignments/{assignment_id}/report/{sheet}.csv")

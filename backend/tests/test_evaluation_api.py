@@ -137,6 +137,49 @@ class EvaluationApiTests(unittest.TestCase):
         self.assertIn("Evaluator 1", exported.text)
         self.assertNotIn(self.email, exported.text)
 
+    def test_my_scores_carries_interim_and_final_state(self) -> None:
+        self.sign_in(self.email)
+        before = self.client.get(f"/assignments/{self.assignment_id}/my-scores").json()
+        self.assertFalse(before["group_final"])
+        # No individual deadline is configured for this assignment, so that section never finalises.
+        self.assertFalse(before["individual_final"])
+        with Session(self.engine) as db:
+            assignment = db.get(models.Assignment, self.assignment_id)
+            assignment.group_deadline = datetime.now(UTC) - timedelta(minutes=1)
+            db.commit()
+        after = self.client.get(f"/assignments/{self.assignment_id}/my-scores").json()
+        self.assertTrue(after["group_final"])
+        self.assertFalse(after["individual_final"])
+        self.assertNotIn("students", after)
+
+    def test_coverage_rows_name_their_subjects(self) -> None:
+        self.sign_in("teacher@example.edu", True)
+        report = self.client.get(f"/assignments/{self.assignment_id}/report").json()
+        group_names = {group["name"] for group in report["groups"]}
+        rows = [row for row in report["coverage"] if row["section"] == "group"]
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertIn(row["left"], group_names)
+            self.assertIn(row["right"], group_names)
+
+    def test_individual_summary_export_totals_work_and_participation(self) -> None:
+        import csv
+        from io import StringIO
+
+        self.sign_in(self.email)
+        self.client.put(self.path + "/draft", json={"changes": [{"pair_id": self.pair_id, "choice": 1}]})
+        self.client.post(self.path + "/submit")
+        self.sign_in("teacher@example.edu", True)
+        content = self.client.get(f"/assignments/{self.assignment_id}/report/students.csv").text
+        rows = {row["email"]: row for row in csv.DictReader(StringIO(content))}
+        self.assertIn("total_score", rows[self.email])
+        submitter = rows[self.email]
+        parts = [submitter[field] for field in
+                 ("group_work_score", "individual_work_score", "group_participation_score", "individual_participation_score")]
+        expected = sum(float(value) for value in parts if value != "")
+        self.assertAlmostEqual(float(submitter["total_score"]), expected)
+        self.assertGreater(float(submitter["total_score"]), 0)
+
     def test_raw_pair_report_shows_latest_evaluator_answer_only_to_instructor(self) -> None:
         path = f"/assignments/{self.assignment_id}/report/raw-pairs"
         self.sign_in(self.email)
@@ -174,7 +217,13 @@ class EvaluationApiTests(unittest.TestCase):
         response = self.client.put(path, json={"group_id": target_id})
         self.assertEqual(response.status_code, 200)
         self.assertGreater(response.json()["changed_pairs"], 0)
-        self.assertEqual(len(self.client.get("/classrooms/1/reassignments").json()), 1)
+        history = self.client.get("/classrooms/1/reassignments").json()
+        self.assertEqual(len(history), 1)
+        # The audit entry names the student, both groups and the instructor who moved them.
+        self.assertEqual(history[0]["student_email"], "a0@example.edu")
+        self.assertEqual(history[0]["old_group_name"], "A")
+        self.assertEqual(history[0]["new_group_name"], "B")
+        self.assertEqual(history[0]["instructor_email"], "teacher@example.edu")
         report = self.client.get(f"/assignments/{self.assignment_id}/report").json()
         self.assertTrue(all(item["votes"] == 0 for item in report["coverage"]))
         with Session(self.engine) as db:

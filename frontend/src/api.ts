@@ -41,11 +41,13 @@ export type StudentScore = {
   group_work_score: number | null; individual_work_score: number | null
   group_participation_score: number | null; individual_participation_score: number | null
 }
+export type MyScores = StudentScore & { group_final: boolean; individual_final: boolean }
 export type AssignmentReport = {
   assignment_id: number; title: string; students: StudentScore[]
   groups: { group_id: number; name: string; work_score: number | null }[]
   coverage: {
     section: string; criterion_id: number; criterion: string; left_id: number; right_id: number
+    left: string | null; right: string | null
     eligible_evaluators: number; target_evaluations: number; assigned_evaluators: number
     votes: number; instructor_votes: number; effective_votes: number
     left_points: number; right_points: number
@@ -217,7 +219,13 @@ export async function reassignStudent(classroomId: number, studentId: number, gr
   return readJson<{ changed_pairs: number; notified_students: number }>(response)
 }
 
-export async function getReassignments(classroomId: number): Promise<{ id: number; student_id: number; old_group_id: number; new_group_id: number; changed_at: string }[]> {
+export type Reassignment = {
+  id: number; student_id: number; student_email: string | null
+  old_group_id: number; old_group_name: string | null
+  new_group_id: number; new_group_name: string | null
+  instructor_email: string; changed_at: string
+}
+export async function getReassignments(classroomId: number): Promise<Reassignment[]> {
   const response = await fetch(`${API_BASE}/classrooms/${classroomId}/reassignments`, { headers: authHeaders() })
   return readJson(response)
 }
@@ -314,9 +322,9 @@ export async function submitEvaluation(assignmentId: number, section: string): P
   return readJson<{ submission_id: number; answered: number; assigned: number }>(response)
 }
 
-export async function getMyScores(assignmentId: number): Promise<StudentScore> {
+export async function getMyScores(assignmentId: number): Promise<MyScores> {
   const response = await fetch(`${API_BASE}/assignments/${assignmentId}/my-scores`, { headers: authHeaders() })
-  return readJson<StudentScore>(response)
+  return readJson<MyScores>(response)
 }
 
 export async function getAssignmentReport(assignmentId: number): Promise<AssignmentReport> {

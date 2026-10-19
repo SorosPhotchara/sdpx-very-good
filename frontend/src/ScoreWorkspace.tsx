@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { downloadReportCsv, downloadReportXlsx, getAssignmentReport, getMyScores, getRawPairResponses, type AssignmentReport, type RawPairResponse, type StudentScore } from './api'
+import { downloadReportCsv, downloadReportXlsx, getAssignmentReport, getMyScores, getRawPairResponses, type AssignmentReport, type MyScores, type RawPairResponse, type StudentScore } from './api'
 import { useLanguage } from './i18n'
 import { useResource } from './useResource'
 import { ToastNotice, useNotice } from './components/ui/toast'
@@ -23,7 +23,7 @@ function RawPairReport({ assignmentId, coverage }: { assignmentId: number; cover
     <DisclosureSummary>{language === 'th' ? 'ความครอบคลุมและคำตอบรายคู่' : 'Pair coverage and raw responses'}</DisclosureSummary>
     <div className="report-details-scroll mt-2 max-h-72 overflow-auto" role="region" aria-label={language === 'th' ? 'ความครอบคลุมรายคู่' : 'Pair coverage'} tabIndex={0}>
       <table className="w-full text-left"><thead><tr><th>{t('Section')}</th><th>{t('Criterion')}</th><th>{language === 'th' ? 'รายการซ้าย' : 'Left'}</th><th>{language === 'th' ? 'รายการขวา' : 'Right'}</th><th>{language === 'th' ? 'ผู้มีสิทธิ์' : 'Eligible'}</th><th>{language === 'th' ? 'เป้าหมาย' : 'Target'}</th><th>{language === 'th' ? 'มอบหมายแล้ว' : 'Assigned'}</th><th>{language === 'th' ? 'ส่งแล้ว' : 'Submitted'}</th><th>{language === 'th' ? 'โหวตอาจารย์' : 'Instructor votes'}</th><th>{language === 'th' ? 'โหวตถ่วงน้ำหนัก' : 'Effective votes'}</th><th>{language === 'th' ? 'แต้มซ้าย' : 'Left points'}</th><th>{language === 'th' ? 'แต้มขวา' : 'Right points'}</th><th>{language === 'th' ? 'ขาดจากเป้าหมาย' : 'Missing to target'}</th><th>{language === 'th' ? 'ขาดผู้มีสิทธิ์ให้ครบ 5' : 'Eligible shortage to five'}</th></tr></thead>
-        <tbody>{coverage.map((item) => <tr key={`${item.criterion_id}:${item.left_id}:${item.right_id}`} className="border-t"><td>{t(item.section === 'group' ? 'Group' : 'Individual')}</td><td>{item.criterion}</td><td>{item.left_id}</td><td>{item.right_id}</td><td>{item.eligible_evaluators}</td><td>{item.target_evaluations}</td><td>{item.assigned_evaluators}</td><td>{item.votes}</td><td>{item.instructor_votes}</td><td>{item.effective_votes.toFixed(2)}</td><td>{item.left_points.toFixed(2)}</td><td>{item.right_points.toFixed(2)}</td><td>{item.missing_to_target}</td><td>{item.shortage_to_five}</td></tr>)}</tbody>
+        <tbody>{coverage.map((item) => <tr key={`${item.criterion_id}:${item.left_id}:${item.right_id}`} className="border-t"><td>{t(item.section === 'group' ? 'Group' : 'Individual')}</td><td>{item.criterion}</td><td>{item.left ?? `#${item.left_id}`}</td><td>{item.right ?? `#${item.right_id}`}</td><td>{item.eligible_evaluators}</td><td>{item.target_evaluations}</td><td>{item.assigned_evaluators}</td><td>{item.votes}</td><td>{item.instructor_votes}</td><td>{item.effective_votes.toFixed(2)}</td><td>{item.left_points.toFixed(2)}</td><td>{item.right_points.toFixed(2)}</td><td>{item.missing_to_target}</td><td>{item.shortage_to_five}</td></tr>)}</tbody>
       </table>
     </div>
     {resource.loading && <p role="status">{language === 'th' ? 'กำลังโหลดคำตอบรายคู่...' : 'Loading raw pair responses...'}</p>}
@@ -44,9 +44,11 @@ function RawPairReport({ assignmentId, coverage }: { assignmentId: number; cover
 export function ScoreWorkspace({ assignmentId, isInstructor }: { assignmentId: number; isInstructor: boolean }) {
   const { t, language } = useLanguage()
   const [opened, setOpened] = useState(false)
-  const resource = useResource<AssignmentReport | StudentScore>(`${assignmentId}:${isInstructor}`, () => isInstructor ? getAssignmentReport(assignmentId) : getMyScores(assignmentId), opened)
+  const resource = useResource<AssignmentReport | MyScores>(`${assignmentId}:${isInstructor}`, () => isInstructor ? getAssignmentReport(assignmentId) : getMyScores(assignmentId), opened)
   const report = isInstructor ? resource.data as AssignmentReport | null : null
-  const mine = !isInstructor ? resource.data as StudentScore | null : null
+  const mine = !isInstructor ? resource.data as MyScores | null : null
+  // Students and instructors read the same interim/final state, so both views carry the label.
+  const finality = report ?? mine
   const [error, setError] = useNotice()
 
   return <details onToggle={(event) => { if (event.currentTarget.open) setOpened(true) }} className="mt-3 rounded-xl border p-3 text-sm">
@@ -59,7 +61,7 @@ export function ScoreWorkspace({ assignmentId, isInstructor }: { assignmentId: n
       <thead><tr><th className="p-2">{t('Student')}</th><th className="p-2">{t('Group work')}</th><th className="p-2">{t('Individual work')}</th><th className="p-2">{t('Group participation')}</th><th className="p-2">{t('Individual participation')}</th></tr></thead>
       <tbody>{(report?.students ?? (mine ? [mine] : [])).map((row) => <tr key={row.student_id} className="border-t"><td className="p-2">{row.email}</td><ScoreCells row={row} /></tr>)}</tbody>
     </table></div>}
-    {report && <p className="mt-2 text-slate-500">{t('Group')}: {t(report.group_final ? 'Final' : 'Interim — may change')} · {t('Individual')}: {t(report.individual_final ? 'Final' : 'Interim — may change')}</p>}
+    {finality && <p className="mt-2 text-slate-500" data-testid="score-finality">{t('Group')}: {t(finality.group_final ? 'Final' : 'Interim — may change')} · {t('Individual')}: {t(finality.individual_final ? 'Final' : 'Interim — may change')}</p>}
     {report && <div className="mt-2 flex flex-wrap gap-3">{(['groups', 'students', 'pairs'] as const).map((sheet) =>
       <button key={sheet} type="button" className="text-blue-700" onClick={() => void downloadReportCsv(assignmentId, sheet).catch(() => setError(t('Export failed.'), 'error'))}>{language === 'th' ? 'ส่งออก' : 'Export'} {t(sheet)} CSV</button>
     )}<button type="button" className="text-blue-700" onClick={() => void downloadReportXlsx(assignmentId).catch(() => setError(t('Export failed.'), 'error'))}>{language === 'th' ? 'ส่งออก Excel' : 'Export Excel'}</button></div>}
