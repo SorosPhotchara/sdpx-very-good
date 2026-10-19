@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from './components/ui/alert'
 import { useEvaluationDraft } from './useEvaluationDraft'
 import { formatCountdown, useCountdown } from './useCountdown'
 import { ToastNotice, useNotice } from './components/ui/toast'
+import { DisclosureSummary } from './components/ui/disclosure-summary'
 
 const choices = ['Strongly left', 'Slightly left', 'Equal', 'Slightly right', 'Strongly right']
 
@@ -23,7 +24,7 @@ export function StudentEvaluationPages({ assignmentId, initiallyOpen = false }: 
   const [section, setSection] = useState<'group' | 'individual'>('group')
 
   return <details open={opened} onToggle={(event) => { setOpened(event.currentTarget.open); if (event.currentTarget.open) setActivated(true) }} className="evaluation-section mt-3 rounded-xl border border-slate-200 text-sm">
-    <summary className="evaluation-section-summary">{language === 'th' ? 'ประเมินผล' : 'Evaluation'}<span>{t(sectionTitle(section))}</span></summary>
+    <DisclosureSummary className="evaluation-section-summary">{language === 'th' ? 'ประเมินผล' : 'Evaluation'}<span>{t(sectionTitle(section))}</span></DisclosureSummary>
     <div className="evaluation-section-content">
       <nav className="evaluation-page-nav" data-testid="evaluation-page-nav" role="group" aria-label={language === 'th' ? 'เลือกหน้าประเมิน' : 'Choose evaluation page'}>
         {sections.map((value) => <Button key={value} type="button" size="sm" variant={section === value ? 'default' : 'outline'}
