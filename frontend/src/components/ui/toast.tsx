@@ -3,7 +3,7 @@ import { useLanguage } from '../../i18n'
 import { Toaster, toast } from 'sonner'
 
 type Notice = { id: number; message: string; kind: 'success' | 'error' | 'info' }
-type ToastActions = { publish: (message: string, kind: Notice['kind']) => Notice; dismiss: (id: number) => void }
+type ToastActions = { publish: (message: string, kind: Notice['kind']) => Notice; dismiss: (id: number) => void; dismissActive: () => void }
 const Actions = createContext<ToastActions | null>(null)
 const Active = createContext<number | null>(null)
 
@@ -18,6 +18,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       return notice
     },
     dismiss(id) { toast.dismiss(`notice-${id}`); setActive(current => current === id ? null : current) },
+    dismissActive() { toast.dismiss(); setActive(null) },
   }), [])
   return <Actions.Provider value={actions}><Active.Provider value={active}>{children}</Active.Provider></Actions.Provider>
 }
@@ -33,6 +34,12 @@ export function useNotice() {
     setNotice(current.current)
   }, [actions])
   return [notice, show] as const
+}
+
+export function useDismissActiveNotice() {
+  const actions = useContext(Actions)
+  if (!actions) throw new Error('ToastProvider is required')
+  return actions.dismissActive
 }
 
 // Keep the notice with its action's accessible context; CSS places it in the viewport.
