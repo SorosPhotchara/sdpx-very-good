@@ -49,6 +49,7 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
   const [studentId, setStudentId] = useState(0)
   const [message, setMessage] = useNotice()
   const [savingPairIds, setSavingPairIds] = useState<Set<number>>(() => new Set())
+  const assignedSection = useRef<HTMLElement>(null)
   const pendingVotes = useRef(new Set<number>())
   const action = useAsyncLock()
   useEffect(() => {
@@ -170,6 +171,17 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
     }
   }
 
+  function changeEvaluationPage(nextPage: number) {
+    setEvaluationPage(nextPage)
+    requestAnimationFrame(() => {
+      assignedSection.current?.focus({ preventScroll: true })
+      assignedSection.current?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start',
+      })
+    })
+  }
+
   return <div>
     {resource.loading && <p role="status">{language === 'th' ? 'กำลังโหลดการประเมินของอาจารย์...' : 'Loading instructor evaluation...'}</p>}
     {resource.error && <div role="alert">{resource.error} <button type="button" onClick={() => void resource.refresh()}>{t('Retry')}</button></div>}
@@ -225,7 +237,7 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
       </div>
       {criterion && leftId && rightId && leftId !== rightId && <p className="mt-2 text-muted-foreground" data-testid="instructor-pair-selection-status">{criterion.name}: {selectedLeftLabel} vs {selectedRightLabel}</p>}
     </details>
-    <section id="instructor-assigned-pairs" tabIndex={-1} aria-labelledby="instructor-assigned-heading" data-testid="instructor-assigned-pairs" className="mt-6 scroll-mt-4">
+    <section ref={assignedSection} id="instructor-assigned-pairs" tabIndex={-1} aria-labelledby="instructor-assigned-heading" data-testid="instructor-assigned-pairs" className="mt-6 scroll-mt-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div><h3 id="instructor-assigned-heading" className="font-semibold text-slate-900">{language === 'th' ? 'คู่ประเมินที่มอบหมายให้ฉัน' : 'Pairs assigned to me'}</h3><p className="mt-1 text-xs text-slate-500">{language === 'th' ? `เกณฑ์ ${criterion?.name || '—'} · รอประเมิน ${assignedInView.filter((pair) => pair.choice === null).length} คู่` : `${criterion?.name || '—'} · ${assignedInView.filter((pair) => pair.choice === null).length} awaiting evaluation`}</p></div>
         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-sm font-semibold text-slate-700" aria-label={language === 'th' ? `${assignedInView.length} คู่ที่มอบหมายให้ฉันในรายการนี้` : `${assignedInView.length} pairs assigned to me in this view`}>{assignedInView.length}</span>
@@ -255,7 +267,7 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
             </fieldset>
           </div>)}</div>
         </section>)}</div>}
-      {evaluationPageCount > 1 && <div className="mt-4 flex items-center justify-end gap-2"><Button type="button" variant="outline" size="sm" disabled={evaluationPage === 0} onClick={() => setEvaluationPage(evaluationPage - 1)}>{language === 'th' ? 'ก่อนหน้า' : 'Previous'}</Button><span className="text-xs text-muted-foreground">{evaluationPage + 1}/{evaluationPageCount}</span><Button type="button" variant="outline" size="sm" disabled={evaluationPage + 1 >= evaluationPageCount} onClick={() => setEvaluationPage(evaluationPage + 1)}>{language === 'th' ? 'ถัดไป' : 'Next'}</Button></div>}
+      {evaluationPageCount > 1 && <div className="mt-4 flex items-center justify-end gap-2"><Button type="button" variant="outline" size="sm" disabled={evaluationPage === 0} onClick={() => changeEvaluationPage(evaluationPage - 1)}>{language === 'th' ? 'ก่อนหน้า' : 'Previous'}</Button><span className="text-xs text-muted-foreground">{evaluationPage + 1}/{evaluationPageCount}</span><Button type="button" variant="outline" size="sm" disabled={evaluationPage + 1 >= evaluationPageCount} onClick={() => changeEvaluationPage(evaluationPage + 1)}>{language === 'th' ? 'ถัดไป' : 'Next'}</Button></div>}
     </section>
     <ToastNotice notice={message} />
   </div>
