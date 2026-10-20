@@ -270,6 +270,10 @@ stateDiagram-v2
     FINALIZED --> CLOSED: reopen<br/>⚠️ ต้องระบุเหตุผล + audit
 ```
 
+> **สถานะที่เก็บจริงมี 4 ค่า** — `DRAFT`, `PUBLISHED`, `FINALIZED`, `ARCHIVED`
+> ส่วน `OPEN` และ `CLOSED` **ไม่เก็บ** แต่คำนวณจาก deadline ของแต่ละ section
+> เพราะถ้าเก็บจะต้องมี scheduler และจะไม่ตรงกับ deadline ทุกครั้งที่อาจารย์เลื่อนเวลา
+
 | ID | Pri | Requirement |
 |---|:---:|---|
 | FR-ASSIGN-01 | M | Assignment MUST มี: ชื่อ, คำอธิบาย, artifact link (ดู A5), `group_max_score`, `individual_max_score`, deadline แยกของ group และ individual, timezone |
@@ -855,7 +859,7 @@ appeal            -- FR-APPEAL-01/02
 | ID | Rule |
 |---|---|
 | DR-01 | เฉพาะคำตอบใน `submission_choices` ของ snapshot ล่าสุด และ `instructor_votes` ที่เข้าสู่การคำนวณ — `draft_choices` ไม่นับ (FR-EVAL-09) |
-| DR-02 | ลบ `pairs` ไม่ได้เมื่อมีคำตอบที่ submit แล้ว — ต้อง soft-delete ด้วย `superseded_at` |
+| DR-02 | ลบ `pairs` ไม่ได้เมื่อมีคำตอบที่ submit แล้ว — ต้อง soft-delete ด้วย `superseded_at` · **ข้อยกเว้นเดียวคือ unpublish** (§7.3) ซึ่งต้องเคลียร์ pair ออกเพื่อให้แก้ criteria ได้: ระบบ MUST เก็บ pair และคำตอบทั้งหมดลง `assignment_events.snapshot` ก่อนลบ จึงไม่มีหลักฐานใดหายไปจากฐานข้อมูล |
 | DR-03 | `computed_score` ที่ finalize แล้วเป็น immutable — แก้ได้ผ่าน `score_override` เท่านั้น *(planned)* |
 | DR-04 | เก็บคะแนนเป็น `numeric` ไม่ใช่ `float` เพื่อไม่ให้เกิดปัญหาปัดเศษในเอกสารคะแนน |
 | DR-05 | ทุก timestamp เก็บเป็น UTC — แปลงตอนแสดงผลเท่านั้น |
@@ -1105,12 +1109,12 @@ flowchart TB
 | §8.2, FR-PAIR-04/05 | Feasibility solver + `GET /assignments/{id}/feasibility` | `test_feasibility.py` ตามตัวอย่างทั้งสองของ §8.2 |
 | FR-PAIR-14, §8.1 | เพดาน workload แยกต่อ side | `test_feasibility.py` |
 | §8.4 INV-1…INV-5, FR-PAIR-16 | invariants ของการจัดสรร | `PairingInvariantTests` กวาด 16 รูปแบบห้อง × 4 seed |
+| §7.3, FR-ASSIGN-03, FR-SCORE-09 | State machine + unpublish/finalize/reopen/recompute พร้อม snapshot | `test_lifecycle.py` · `assignment_events` |
 
 **กำลังแก้โค้ดให้ตรงกับเอกสารนี้** (เอกสารนำ โค้ดตาม)
 
 | ข้อ | เรื่อง | สถานะเดิมในโค้ด | Milestone |
 |---|---|---|---|
-| §7.3, FR-ASSIGN-03 | State machine + unpublish/finalize/reopen | เดิมมีแค่ `published_at` | M3 |
 | §3, FR-AUTH-02, FR-CLASS-06 | Role matrix (TA/Co-teacher) + allowed domain | เดิมมีแค่ instructor allowlist จาก env | M3 |
 | FR-CLASS-01/05 | CSV `student_id`/`display_name` + upsert | เดิมรับแค่ `email`,`groupname` | M3 |
 
@@ -1122,7 +1126,7 @@ flowchart TB
 | FR-ANON-02/03 | k-anonymity threshold และห้ามแสดง delta | M3 |
 | §10 QS-01…07, FR-QS-01/02/03 | Quality signals | M3 |
 | FR-AUDIT-01/02/03 | Audit log แบบ append-only แยก storage | M3 |
-| FR-SCORE-06/08 | Nightly recompute และ instructor override พร้อมเหตุผล | M3 |
+| FR-SCORE-06 (ส่วน nightly), FR-SCORE-08 | Recompute อัตโนมัติรายวัน และ instructor override พร้อมเหตุผล (on-demand recompute ทำแล้ว) | M3 |
 | §7.10 FR-APPEAL-01/02 | ระบบอุทธรณ์ | M3 |
 | §7.9 FR-NOTIF-01…06 | Notification ทางอีเมล (วันนี้เก็บลงตาราง `notifications` แต่ไม่ส่งอีเมล) | M4 |
 | FR-PAIR-15 | เตือนเมื่อขนาดกลุ่มอยู่นอกช่วง 4–7 | M4 |
@@ -1189,6 +1193,8 @@ flowchart TB
 | 22 | INV-3 (coverage ต่างกัน ≤ 1) เป็นไปไม่ได้พร้อมกับการให้งานทุกคน — ห้อง 10/10/2 มี 3 คู่ 6 ที่นั่งต่อ 22 คน | จำกัดขอบเขต INV-3 ไว้ที่แผนตามเป้าหมาย และเขียนกฎที่ใช้จริงเป็น FR-PAIR-16 (§8.4) |
 | 23 | INV-4 (คู่ต่อคนต่างกัน ≤ 1) ไม่จริงในห้องรูปร่างไม่สมมาตร | เพิ่มขั้นเกลี่ยภาระใน §8.4 ซึ่งไม่กระทบ coverage ทำให้ INV-4 จริงเสมอ |
 | 24 | §8.4 เขียน pseudocode แบบวนต่อ evaluator แต่ข้อกำหนด coverage เป็นของ pair | เขียนใหม่เป็นแบบวนต่อ pair ให้ตรงกับที่ implement |
+| 25 | §7.3 บอก unpublish "ลบ pairs ทั้งหมด" แต่ DR-02 ห้ามลบ pair ที่มีคำตอบแล้ว | เก็บ snapshot ลง `assignment_events` ก่อนลบ — เคลียร์ตารางที่ใช้งานได้ตาม §7.3 โดยไม่เสียหลักฐานตาม DR-02 |
+| 26 | `OPEN`/`CLOSED` อยู่ใน state machine แต่ไม่มีเวลาเปิดให้เก็บ และจะเพี้ยนเมื่อเลื่อน deadline | เก็บเฉพาะ 4 สถานะที่อาจารย์สั่ง ส่วน OPEN/CLOSED คำนวณจาก deadline (§7.3) |
 
 ---
 

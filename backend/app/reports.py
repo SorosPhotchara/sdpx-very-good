@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from . import models
 from .feasibility import solve_group_feasibility, solve_individual_feasibility
+from .lifecycle import is_final
 from .models import shown_subjects as _shown
 from .scoring import POINTS, PairVote, participation_multiplier, score_items
 from .timezone import as_utc
@@ -212,8 +213,9 @@ def assignment_report(db: Session, assignment: models.Assignment) -> dict:
     return {"assignment_id": assignment.id, "title": assignment.title, "students": rows,
             "groups": [{"group_id": group.id, "name": group.name, "work_score": group_scores[group.id]} for group in groups],
             "coverage": coverage, "criterion_scores": criterion_scores,
-            "group_final": _is_final(assignment.group_deadline),
-            "individual_final": _is_final(assignment.individual_deadline)}
+            "status": assignment.status,
+            "group_final": is_final(assignment, True),
+            "individual_final": is_final(assignment, False)}
 
 
 def raw_pair_responses(db: Session, assignment: models.Assignment) -> list[dict]:
@@ -251,9 +253,3 @@ def raw_pair_responses(db: Session, assignment: models.Assignment) -> list[dict]
     return rows
 
 
-def _is_final(deadline: datetime | None) -> bool:
-    if deadline is None:
-        return False
-    if deadline.tzinfo is None:
-        deadline = deadline.replace(tzinfo=UTC)
-    return datetime.now(UTC) >= deadline

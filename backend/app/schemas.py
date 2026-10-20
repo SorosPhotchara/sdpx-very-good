@@ -166,6 +166,12 @@ class CriterionInput(BaseModel):
     weight: float
 
 
+class LifecycleRequest(BaseModel):
+    """§7.3: unpublish and reopen must say why, on the record."""
+
+    reason: str | None = None
+
+
 class AssignmentSetup(BaseModel):
     title: str
     group_score: float = 0.0

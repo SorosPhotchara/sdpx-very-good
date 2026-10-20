@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import models
+from . import lifecycle, models
 from .instructor_evaluation import deadline_for
 from .publish import PlannedPair, build_plan
 
@@ -47,7 +47,7 @@ def _validate_move(db: Session, classroom_id: int, student_id: int,
     assignments = db.query(models.Assignment).filter_by(classroom_id=classroom_id).all()
     now = datetime.now(UTC)
     for assignment in assignments:
-        if assignment.published_at is None:
+        if assignment.status != lifecycle.PUBLISHED:
             continue
         for criterion in assignment.criteria:
             deadline = deadline_for(assignment, criterion.is_group)
@@ -94,7 +94,7 @@ def _effects_after_move(db: Session, assignments: list[models.Assignment],
     affected = {moved_student_id}
 
     for assignment in assignments:
-        if assignment.published_at is None:
+        if assignment.status != lifecycle.PUBLISHED:
             continue
         active = db.query(models.Pair).filter_by(assignment_id=assignment.id, superseded_at=None).all()
         valid_student_evaluators: dict[tuple[int, int, int], set[int]] = {}

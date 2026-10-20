@@ -7,7 +7,7 @@ from math import isclose
 
 from sqlalchemy.orm import Session
 
-from . import models
+from . import lifecycle, models
 from .feasibility import Feasibility, solve_group_feasibility, solve_individual_feasibility
 from .pairing import PairAllocation, allocate_group_pairs, allocate_individual_pairs
 
@@ -132,11 +132,79 @@ def build_plan(db: Session, assignment_id: int) -> list[PlannedPair]:
     return plan
 
 
+def withdraw(db: Session, assignment_id: int) -> dict:
+    """Remove an assignment's plan and answers, returning them for the record.
+
+    §7.3 wants unpublish to clear the pairs so the setup can change, while DR-02
+    forbids destroying a pair that carries a submitted answer. Both hold if the
+    evidence leaves the operational tables without leaving the database: the rows
+    are returned here and stored on the lifecycle event, in the same spirit as
+    `classroom_archives` for a deleted classroom.
+    """
+    pairs = db.query(models.Pair).filter_by(assignment_id=assignment_id).all()
+    pair_ids = [pair.id for pair in pairs]
+    submissions = db.query(models.Submission).filter_by(assignment_id=assignment_id).all()
+    submission_ids = [item.id for item in submissions]
+
+    choices = (db.query(models.SubmissionChoice)
+               .filter(models.SubmissionChoice.submission_id.in_(submission_ids)).all()
+               if submission_ids else [])
+    drafts = (db.query(models.DraftChoice)
+              .filter(models.DraftChoice.pair_id.in_(pair_ids)).all() if pair_ids else [])
+    votes = (db.query(models.InstructorVote)
+             .filter(models.InstructorVote.pair_id.in_(pair_ids)).all() if pair_ids else [])
+
+    snapshot = {
+        "pairs": [{"id": pair.id, "criteria_id": pair.criteria_id,
+                   "pair_type": pair.pair_type,
+                   "left_id": pair.left_id, "right_id": pair.right_id,
+                   "left_group_id": pair.left_group_id, "right_group_id": pair.right_group_id,
+                   "evaluator_student_id": pair.assigned_to_student_id,
+                   "evaluator_instructor_email": pair.assigned_to_instructor_email,
+                   "display_flipped": pair.display_flipped,
+                   "superseded_at": as_text(pair.superseded_at)} for pair in pairs],
+        "submissions": [{"id": item.id, "student_id": item.student_id,
+                         "section": item.section,
+                         "submitted_at": as_text(item.submitted_at)} for item in submissions],
+        "submission_choices": [{"submission_id": item.submission_id, "pair_id": item.pair_id,
+                                "choice": item.choice} for item in choices],
+        "draft_choices": [{"student_id": item.student_id, "pair_id": item.pair_id,
+                           "choice": item.choice} for item in drafts],
+        "instructor_votes": [{"pair_id": item.pair_id, "choice": item.choice,
+                              "submitted_at": as_text(item.submitted_at)} for item in votes],
+    }
+
+    # Explicit, ordered deletes: submission_choices.pair_id has no ORM
+    # relationship, so the unit of work does not know pairs must go last and
+    # would otherwise delete them first.
+    def purge(model, column, values):
+        if values:
+            db.query(model).filter(column.in_(values)).delete(synchronize_session=False)
+
+    purge(models.SubmissionChoice, models.SubmissionChoice.pair_id, pair_ids)
+    purge(models.SubmissionChoice, models.SubmissionChoice.submission_id, submission_ids)
+    purge(models.DraftChoice, models.DraftChoice.pair_id, pair_ids)
+    purge(models.InstructorVote, models.InstructorVote.pair_id, pair_ids)
+    purge(models.Submission, models.Submission.id, submission_ids)
+    purge(models.Pair, models.Pair.id, pair_ids)
+    db.flush()
+    return snapshot
+
+
+def as_text(value) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
 def publish(db: Session, assignment_id: int) -> int:
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise ValueError("Assignment not found")
-    if assignment.published_at is not None or db.query(models.Pair.id).filter_by(assignment_id=assignment_id).first():
+    if assignment.status == lifecycle.PUBLISHED:
+        raise ValueError("Assignment is already published")
+    if assignment.status != lifecycle.DRAFT:
+        raise ValueError(f"Cannot publish an assignment in state {assignment.status}")
+    if db.query(models.Pair.id).filter_by(assignment_id=assignment_id,
+                                          superseded_at=None).first():
         raise ValueError("Assignment is already published")
     plan = build_plan(db, assignment_id)
     if not plan:
@@ -157,6 +225,7 @@ def publish(db: Session, assignment_id: int) -> int:
         ))
     try:
         assignment.published_at = datetime.now(UTC)
+        assignment.status = lifecycle.PUBLISHED
         db.add_all(pairs)
         db.commit()
     except Exception:

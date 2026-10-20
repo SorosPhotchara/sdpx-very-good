@@ -86,10 +86,32 @@ class Assignment(Base):
     group_deadline = Column(DateTime(timezone=True), nullable=True)
     individual_deadline = Column(DateTime(timezone=True), nullable=True)
     published_at = Column(DateTime(timezone=True), nullable=True)
+    # §7.3. Only instructor-driven states are stored; OPEN and CLOSED follow
+    # from the deadlines, see app/lifecycle.py.
+    status = Column(String, default="DRAFT", nullable=False)
+    finalized_at = Column(DateTime(timezone=True), nullable=True)
 
     classroom = relationship("Classroom", back_populates="assignments")
     criteria = relationship("Criteria", back_populates="assignment")
     pairs = relationship("Pair", back_populates="assignment")
+
+class AssignmentEvent(Base):
+    """Lifecycle history: who moved an assignment, when, and why.
+
+    A finalize also stores the settled report so it can be read back without
+    recomputing it (FR-SCORE-09).
+    """
+
+    __tablename__ = "assignment_events"
+
+    id = Column(Integer, primary_key=True)
+    assignment_id = Column(Integer, ForeignKey("assignments.id"), nullable=False, index=True)
+    action = Column(String, nullable=False)
+    actor_email = Column(String, nullable=False)
+    reason = Column(Text, nullable=True)
+    occurred_at = Column(DateTime(timezone=True), nullable=False)
+    snapshot = Column(JSON, nullable=True)
+
 
 class Criteria(Base):
     __tablename__ = "criteria"

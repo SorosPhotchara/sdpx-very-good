@@ -6,20 +6,20 @@ Implementation tracker governed by [the Definition of Done](project-idea/DEFINIT
 
 - Use PostgreSQL exclusively. Docker runs only PostgreSQL; FastAPI and Vite run as separate host processes.
 - The first usable release includes evaluation, scores, and basic reports.
-- Require at least three nonempty groups before publishing an assignment. For each Group or Individual pair/criterion, initially assign `min(5, distinct eligible Student evaluators)` people, then balance workload; publication is allowed below five when the eligible pool is smaller.
+- Require at least three nonempty groups before publishing an assignment. Coverage comes from the feasibility solver: up to the assignment's target for Group pairs, and `m - 2` (complete enumeration) for Individual pairs, each bounded by its workload ceiling. Then even out workloads. Publication is allowed when the target cannot be reached, and the shortfall is reported with its cause. **Supersedes** the earlier `min(5, distinct eligible Student evaluators)` rule (PRD §8.2, §8.3, D4).
 - Allow partial submissions before the deadline and use the latest submission for scoring.
-- A non-submitter receives zero for their own participation component; this does not erase the evaluated item's votes from other evaluators.
+- A non-submitter keeps a participation multiplier of zero, which zeroes their own personal score; this does not erase the evaluated item's votes from other evaluators, nor their group's work score.
 - Use pairwise instructor evaluation in the first release; direct numeric grading is outside that release.
 - Allow group reassignment only before the deadline.
 - Permit instructor access only for verified emails in `INSTRUCTOR_EMAILS`, including classroom creation and instructor invitations.
 - Host the frontend and FastAPI API together using Vercel Services, with Neon PostgreSQL through the Vercel Marketplace (confirmed by the owner).
 - A student can belong to multiple classrooms. Email uniqueness is per classroom, and the verified Google email activates all matching pending memberships on first login.
-- Use five response levels with an equal/tie choice. Left/right points are `1/0`, `.75/.25`, `.5/.5`, `.25/.75`, and `0/1`.
+- Use six response levels with no tie. Left/right points are `1/0`, `.8/.2`, `.6/.4`, `.4/.6`, `.2/.8`, and `0/1`. Each comparison is shown in a randomised left-right order that is stored with it. **Supersedes** the earlier five-level scale with an equal choice (PRD D1, D8).
 - Count each Student at most once among active assignments and effective votes for a criterion/subject pair, including after re-submission; keep superseded history for audit. Track distinct submitted Student votes separately from assignments and Instructor votes; show achievable coverage and the shortage from five. Do not offer individual evaluation to groups with fewer than three members.
 - Preserve the four prototype classrooms in PostgreSQL; the old database file is no longer part of the application.
 - Use Vercel for deployment; account login, Neon provisioning and the staging Google OAuth origin remain external setup.
-- Set separate Group and Individual deadlines and participation score maxima per assignment. Students in groups with fewer than three members are exempt from an individual participation penalty.
-- Treat participation as a separate score component. A new submission replaces the prior submission snapshot for that page; submitting collects the latest saved draft answers for that page.
+- Set separate Group and Individual deadlines per assignment. There are no participation score maxima: participation is a multiplier. Students in groups with fewer than three members have no Individual section to answer for.
+- Treat participation as a multiplier on the personal score, `min(1, (submitted / assigned) / completion_threshold)` across both sections, not as a score component of its own. **Supersedes** the earlier separate-component decision (PRD D5, §9.4). A new submission replaces the prior submission snapshot for that page; submitting collects the latest saved draft answers for that page.
 - Show an interim item without votes as "no data"; only the final calculation may show zero for an unscored item.
 - The four migrated classrooms must be assigned to the first instructor email in `INSTRUCTOR_EMAILS`; database-only approvals do not satisfy the DoD.
 
@@ -27,9 +27,9 @@ Implementation tracker governed by [the Definition of Done](project-idea/DEFINIT
 
 - [x] D1 — PostgreSQL is the only database. Versioned migrations, runtime, demo seed, and isolated test schemas are verified against PostgreSQL 17.
 - [x] D2 — The first release includes evaluation, scoring, and basic reports.
-- [x] D3 — Initial coverage is `min(5, distinct eligible Student evaluators)` per pair/criterion, with at most one active assignment per Student. Allow publication below five when eligible people are scarce; require at least three nonempty groups and skip individual evaluation for groups smaller than three.
+- [x] D3 — Coverage is solved per side from the assignment's target and workload ceilings, with at most one active assignment per Student. Allow publication when the target cannot be reached; require at least three nonempty groups and skip individual evaluation for groups smaller than three.
 - [x] D4 — Accept partial submissions before the deadline and score the latest submission.
-- [x] D5 — Zero for non-submission applies to the evaluator's own participation component.
+- [x] D5 — Non-submission zeroes the evaluator's own participation multiplier, and so their personal score, leaving their group's work score untouched.
 - [x] D6 — The first release uses pairwise instructor evaluation only.
 - [x] D7 — Group reassignment is allowed only before the deadline.
 - [x] D8 — `INSTRUCTOR_EMAILS` is the instructor allowlist; pending CSV students activate on first verified Google login.
@@ -60,7 +60,7 @@ Implementation tracker governed by [the Definition of Done](project-idea/DEFINIT
 - [x] Retain an evaluation and audit snapshot for at least 366 days when deleting a classroom, in the same transaction as active-record removal. PostgreSQL integration and Alembic upgrade tests pass.
 - [x] Import students from CSV (`email`, `groupname`), report row errors, avoid duplicates, create groups, and activate pending memberships on first verified login.
 - [x] Create and edit unpublished assignments with separate group and individual criteria, weights totaling 100% per section, score maxima, deadlines, and instructor vote weight.
-- [x] Show and validate the derived Assignment total maximum as Group work + Individual work + both participation maxima in the API and setup UI.
+- [x] Show and validate the derived Assignment total maximum as Group work + Individual work in the API and setup UI.
 - [x] Show a pair allocation preview, publish an assignment, and persist the resulting pair assignments atomically. Backend and frontend controls are implemented.
 
 ## 4. Student evaluation flow
@@ -74,7 +74,7 @@ Implementation tracker governed by [the Definition of Done](project-idea/DEFINIT
 
 ## 5. Scoring, reports, and instructor follow-up
 
-- [x] Compute group and individual work scores from submitted votes, criterion weights, score maxima, and instructor vote weight. Give partial submitters proportional credit in the separate participation component; do not scale their work score by completion ratio.
+- [x] Compute group and individual work scores from submitted votes, criterion weights, score maxima, instructor vote weight and the assignment's score band. Scale a partial submitter's personal total by their participation multiplier, leaving their group's work score and every other student's score untouched.
 - [x] Recompute interim scores when requested (more frequently than daily), finalize by deadline state, and show only the caller's scores to students.
 - [x] Build instructor summaries and pair coverage report with criterion totals, achievable Student coverage, actual Instructor vote count, weighted effective vote count, and cumulative weighted points for both subjects.
 - [x] Verify submitted Student coverage against the achievable target per Group and Individual pair/criterion. When fewer than five distinct students are eligible, expose the fixed shortage from five; when eligible students have not submitted, show the remaining gap to the achievable target and assign unused eligible students before the deadline where possible. API tests cover shortages and duplicate rejection; the Instructor picker hides already assigned evaluators.

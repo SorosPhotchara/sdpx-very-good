@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from . import models, schemas
+from . import lifecycle, models, schemas
 from .models import shown_subjects as _shown
 
 
@@ -20,7 +20,7 @@ def deadline_for(assignment: models.Assignment, is_group: bool):
 
 def _validate_pair(db: Session, assignment: models.Assignment, criteria_id: int,
                    left_id: int, right_id: int) -> tuple[models.Criteria, list]:
-    if assignment.published_at is None:
+    if assignment.status != lifecycle.PUBLISHED:
         raise HTTPException(409, "Publish the assignment first")
     criterion = db.get(models.Criteria, criteria_id)
     if criterion is None or criterion.assignment_id != assignment.id:

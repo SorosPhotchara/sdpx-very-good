@@ -5,7 +5,7 @@ from math import isclose
 
 from sqlalchemy.orm import Session
 
-from . import models, schemas
+from . import lifecycle, models, schemas
 from .scoring import DEFAULT_COMPLETION_THRESHOLD, DEFAULT_SCORE_CEILING, DEFAULT_SCORE_FLOOR
 
 
@@ -91,8 +91,10 @@ def create_assignment(
 
 
 def update_assignment(db: Session, assignment: models.Assignment, payload: schemas.AssignmentSetup) -> models.Assignment:
-    if assignment.published_at is not None or db.query(models.Pair.id).filter_by(assignment_id=assignment.id).first():
-        raise ValueError("Published assignments cannot be edited")
+    active_pairs = db.query(models.Pair.id).filter_by(
+        assignment_id=assignment.id, superseded_at=None).first()
+    if assignment.status != lifecycle.DRAFT or active_pairs:
+        raise ValueError("Only draft assignments can be edited")
     if not payload.title.strip() or payload.instructor_weight <= 0:
         raise ValueError("Assignment title and instructor weight are required")
     group_active = _validate_section(payload.group_criteria, payload.group_score,

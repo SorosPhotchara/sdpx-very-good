@@ -7,7 +7,9 @@ from ..assignment_setup import create_assignment as create_complete_assignment, 
 from ..auth import Identity, current_identity
 from ..dependencies import get_db, instructor_emails, require_owner, utc_deadline, validate_page
 from ..instructor_evaluation import assign_pair, assign_student_pair, read_instructor_pairs, save_instructor_vote
-from ..publish import build_plan, plan_feasibility, publish
+from ..lifecycle import DRAFT, FINALIZED, PUBLISHED, move, record
+from ..publish import build_plan, plan_feasibility, publish, withdraw
+from ..reports import assignment_report
 
 router = APIRouter(dependencies=[Depends(current_identity)])
 
@@ -42,7 +44,7 @@ def read_assignments(
         require_owner(classroom_id, identity, db)
     query = db.query(models.Assignment).filter_by(classroom_id=classroom_id)
     if not is_owner:
-        query = query.filter(models.Assignment.published_at.is_not(None))
+        query = query.filter(models.Assignment.status != DRAFT)
     return query.offset(skip).limit(limit).all()
 
 
@@ -98,6 +100,117 @@ def edit_assignment_setup(
         return update_complete_assignment(db, assignment, payload)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
+
+
+def _owned_assignment(assignment_id: int, identity: Identity, db: Session) -> models.Assignment:
+    assignment = db.get(models.Assignment, assignment_id)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    require_owner(assignment.classroom_id, identity, db)
+    return assignment
+
+
+@router.post("/assignments/{assignment_id}/unpublish")
+def unpublish_assignment(
+    assignment_id: int,
+    payload: schemas.LifecycleRequest,
+    identity: Identity = Depends(current_identity),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return an assignment to DRAFT so its setup can be changed (§7.3).
+
+    The pairs and every answer against them are removed, which is what makes the
+    criteria editable again, but they are kept on the lifecycle event first so
+    nothing collected is simply lost (see `withdraw`).
+    """
+    assignment = _owned_assignment(assignment_id, identity, db)
+    try:
+        event = move(db, assignment, DRAFT, "unpublish", identity.email, payload.reason)
+        event.snapshot = withdraw(db, assignment_id)
+        assignment.published_at = None
+        db.commit()
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"assignment_id": assignment_id, "status": assignment.status,
+            "withdrawn_pairs": len(event.snapshot["pairs"]),
+            "withdrawn_answers": (len(event.snapshot["submission_choices"])
+                                  + len(event.snapshot["instructor_votes"]))}
+
+
+@router.post("/assignments/{assignment_id}/finalize")
+def finalize_assignment(
+    assignment_id: int,
+    identity: Identity = Depends(current_identity),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Settle the scores and snapshot the calculation (FR-SCORE-09)."""
+    assignment = _owned_assignment(assignment_id, identity, db)
+    try:
+        report = assignment_report(db, assignment)
+        event = move(db, assignment, FINALIZED, "finalize", identity.email, report=report)
+        db.commit()
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"assignment_id": assignment_id, "status": assignment.status,
+            "finalized_at": assignment.finalized_at, "event_id": event.id}
+
+
+@router.post("/assignments/{assignment_id}/reopen")
+def reopen_assignment(
+    assignment_id: int,
+    payload: schemas.LifecycleRequest,
+    identity: Identity = Depends(current_identity),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Undo a finalize so scores can change again; needs a reason (§7.3)."""
+    assignment = _owned_assignment(assignment_id, identity, db)
+    try:
+        move(db, assignment, PUBLISHED, "reopen", identity.email, payload.reason)
+        db.commit()
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"assignment_id": assignment_id, "status": assignment.status}
+
+
+@router.post("/assignments/{assignment_id}/recompute")
+def recompute_assignment(
+    assignment_id: int,
+    identity: Identity = Depends(current_identity),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Recompute on demand (FR-SCORE-06).
+
+    Scores are derived on read, so this exists to answer "are these current?"
+    and to leave a record that someone asked. A settled assignment is served
+    from its snapshot instead, so finalized numbers never move.
+    """
+    assignment = _owned_assignment(assignment_id, identity, db)
+    if assignment.status == FINALIZED:
+        raise HTTPException(status_code=409,
+                            detail="A finalized assignment is served from its snapshot")
+    record(db, assignment, "recompute", identity.email)
+    report = assignment_report(db, assignment)
+    db.commit()
+    return report
+
+
+@router.get("/assignments/{assignment_id}/events")
+def read_assignment_events(
+    assignment_id: int,
+    identity: Identity = Depends(current_identity),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """Lifecycle history, newest first. Snapshots are large, so only their
+    presence is reported here."""
+    _owned_assignment(assignment_id, identity, db)
+    events = (db.query(models.AssignmentEvent).filter_by(assignment_id=assignment_id)
+              .order_by(models.AssignmentEvent.id.desc()).all())
+    return [{"id": event.id, "action": event.action, "actor": event.actor_email,
+             "reason": event.reason, "occurred_at": utc_deadline(event.occurred_at),
+             "has_snapshot": event.snapshot is not None} for event in events]
 
 
 @router.get("/assignments/{assignment_id}/feasibility")

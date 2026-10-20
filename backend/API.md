@@ -25,6 +25,12 @@ All routes except `GET /health` require `Authorization: Bearer <Google ID token>
 | `GET/PUT /assignments/{id}/setup` | assigned instructor | Read or replace full setup; PUT is closed after publication. |
 | `GET /assignments/{id}/criteria` | assigned instructor | Criterion IDs, names, weights, section flags. |
 | `GET /assignments/{id}/preview` | assigned instructor | `{pair_assignments}` without persistence; initial allocations use distinct eligible Students up to five per criterion/subject pair, then top up so every eligible Student has at least one pair per criterion. `assigned_evaluators` may therefore exceed `target_evaluations`. |
+| `POST /assignments/{id}/unpublish` | assigned instructor | Returns a published assignment to `DRAFT` so its setup can change. Requires `reason`. Pairs and every answer against them are stored on the lifecycle event and then removed, which is what makes the criteria editable again. |
+| `POST /assignments/{id}/finalize` | assigned instructor | Settles both sections and snapshots the formula settings together with the computed report on the lifecycle event. |
+| `POST /assignments/{id}/reopen` | assigned instructor | Returns a finalized assignment to `PUBLISHED`. Requires `reason`. |
+| `POST /assignments/{id}/recompute` | assigned instructor | Returns a freshly computed report and records that it was asked for. Refused once finalized, which is served from its snapshot. |
+| `GET /assignments/{id}/events` | assigned instructor | Lifecycle history, newest first: action, actor, reason, time, and whether a snapshot was stored. |
+| `GET /assignments/{id}/feasibility` | assigned instructor | Coverage and workload a publish would use, per side, with the reason when a target had to be reduced. |
 | `POST /assignments/{id}/publish` | assigned instructor | `{pair_assignments}`; one publication only. Fewer than five eligible Students for a pair does not by itself block publication. |
 | `GET /assignments/{id}/evaluation/{group\|individual}` | assigned student | Only that student's Pair IDs, subject labels, draft/submitted choices, deadline and open state. |
 | `PUT /assignments/{id}/evaluation/{section}/draft` | assigned student | `{changes:[{pair_id,choice}]}`; choice 1–5 or null to clear. Changes are atomic. |

@@ -6,7 +6,7 @@ from time import perf_counter
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from . import models
+from . import lifecycle, models
 from .models import shown_subjects as _shown
 from .scoring import CHOICES
 from .timezone import as_utc
@@ -17,7 +17,7 @@ def context(db: Session, assignment_id: int, section: str, email: str):
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    if assignment.published_at is None:
+    if assignment.status != lifecycle.PUBLISHED:
         raise HTTPException(404, "Assignment not published")
     if section not in ("group", "individual"):
         raise HTTPException(404, "Evaluation section not found")
