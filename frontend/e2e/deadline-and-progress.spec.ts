@@ -4,8 +4,9 @@ const api = 'http://127.0.0.1:8000'
 const instructor = { Authorization: 'Bearer mock:teacher@example.edu' }
 
 // Covers the student-facing deadline, progress and interim-score signals the PRD requires:
-// FR-EVAL-13 countdown, FR-SCORE-17 per-criterion submitted progress,
-// FR-EVAL-06 unevaluated-pair warning and FR-SCORE-13 interim labelling.
+// FR-EVAL-10 countdown, FR-EVAL-07 per-criterion submitted progress,
+// FR-EVAL-05 unevaluated-pair warning and FR-SCORE-07 interim labelling.
+// (PRD v2.0 numbering; these were FR-EVAL-13, FR-SCORE-17, FR-EVAL-06 and FR-SCORE-13 in v1.3.)
 test('countdown, per-criterion submitted progress, unevaluated warning and interim scores', async ({ page, request }) => {
   test.setTimeout(90000)
   const name = `Deadline signals ${Date.now()}`
@@ -35,13 +36,13 @@ test('countdown, per-criterion submitted progress, unevaluated warning and inter
   await page.getByRole('button', { name: new RegExp(name) }).click()
   const evaluation = page.getByRole('heading', { name: 'Group evaluation', exact: true }).locator('..')
 
-  // FR-EVAL-13: a live countdown, not just the deadline date.
+  // FR-EVAL-10: a live countdown, not just the deadline date.
   const countdown = evaluation.getByTestId('evaluation-countdown')
   await expect(countdown).toBeVisible()
   await expect(countdown).toHaveText(/\d+d \d+h \d+m left/)
   await expect(evaluation.getByText('Deadline:', { exact: false })).toBeVisible()
 
-  // FR-SCORE-17: progress counts submitted pairs per criterion, so it starts at zero
+  // FR-EVAL-07: progress counts submitted pairs per criterion, so it starts at zero
   // even though a draft is saved below.
   const progress = evaluation.getByTestId('criterion-progress')
   await expect(progress.getByRole('progressbar')).toHaveCount(2)
@@ -50,7 +51,7 @@ test('countdown, per-criterion submitted progress, unevaluated warning and inter
   await expect(progress).toContainText(/0 \/ \d+ pairs submitted/)
   await expect(progress.locator('progress[aria-label^="Quality"]')).toHaveAttribute('aria-label', /Quality: 0 of \d+ pairs submitted/)
 
-  // FR-EVAL-06: the page warns while pairs remain unevaluated.
+  // FR-EVAL-05: the page warns while pairs remain unevaluated.
   await expect(evaluation.getByTestId('unanswered-notice')).toContainText(/pairs? still unevaluated/)
   await evaluation.locator('input[type=radio]').first().click()
   await expect(evaluation.getByText('Draft saved.', { exact: true })).toBeVisible()
@@ -67,7 +68,7 @@ test('countdown, per-criterion submitted progress, unevaluated warning and inter
   await expect(evaluation.getByText(/Submitted 1 of/)).toBeVisible()
   await expect(progress).toContainText(/1 \/ \d+ pairs submitted/)
 
-  // FR-SCORE-13 / FR-REPORT-07: the student sees the interim label, not only the instructor.
+  // FR-SCORE-07 / FR-REPORT-06: the student sees the interim label, not only the instructor.
   await page.locator('summary').filter({ hasText: 'Scores and coverage' }).click()
   const finality = page.getByTestId('score-finality')
   await expect(finality).toBeVisible()
@@ -76,7 +77,7 @@ test('countdown, per-criterion submitted progress, unevaluated warning and inter
   const mine = await request.get(`${api}/assignments/${assignmentId}/my-scores`, { headers: { Authorization: 'Bearer mock:student1@example.edu' } })
   expect(await mine.json()).toMatchObject({ group_final: false, individual_final: false })
 
-  // FR-EVAL-01 / FR-EVAL-07: one evaluation page at a time, switched by the page nav.
+  // FR-EVAL-01 / FR-EVAL-11: one evaluation page at a time, switched by the page nav.
   await expect(page.getByRole('heading', { name: 'Individual evaluation', exact: true })).toHaveCount(0)
   await page.getByTestId('evaluation-page-individual').click()
   await expect(page.getByRole('heading', { name: 'Individual evaluation', exact: true })).toHaveCount(1)

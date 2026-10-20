@@ -125,7 +125,8 @@ test('complete publication, submission, scores and exports with real API', async
   await expect(page.getByText(/Moved student\./)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Recent moves', exact: true })).toBeVisible()
   await expect(page.getByLabel('Choose student').locator('option:checked')).toHaveText('student1@example.edu (Group 1)')
-  // FR-PAIR-14: the audit entry names the student, both groups and who ordered the move.
+  // FR-AUDIT-02 (v1.3 FR-PAIR-14): the audit entry names the student, both groups and who
+  // ordered the move. Note v2.0 reuses the number FR-PAIR-14 for the individual workload cap.
   const moves = page.getByTestId('reassignment-history')
   await expect(moves).toContainText('student1@example.edu')
   await expect(moves).toContainText('Group 0 → Group 1')
