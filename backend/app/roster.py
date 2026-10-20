@@ -64,10 +64,19 @@ def parse_roster(csv_text: str) -> ParsedRoster:
     return ParsedRoster([] if errors else rows, errors)
 
 
-def import_roster(db: Session, classroom_id: int, csv_text: str) -> ParsedRoster:
+def import_roster(db: Session, classroom_id: int, csv_text: str,
+                  allowed_domains: set[str] | None = None) -> ParsedRoster:
     parsed = parse_roster(csv_text)
     if parsed.errors:
         return parsed
+    if allowed_domains:
+        # FR-AUTH-02: a classroom may restrict which domains can join, and the
+        # roster is where that is decided, since login matches against it.
+        outside = [f"row {index}: {row.email} is outside the allowed domains"
+                   for index, row in enumerate(parsed.rows, start=2)
+                   if row.email.rpartition("@")[2] not in allowed_domains]
+        if outside:
+            return ParsedRoster([], outside)
     if db.query(models.Student.id).filter_by(classroom_id=classroom_id).first():
         return ParsedRoster([], ["Classroom already has a roster"])
 

@@ -14,7 +14,7 @@ class PublishTests(unittest.TestCase):
         self.database = TestDatabase()
         self.engine = self.database.engine
         self.db = Session(self.engine)
-        classroom = models.Classroom(name="Course", instructor_emails="teacher@example.edu")
+        classroom = models.Classroom(name="Course")
         self.db.add(classroom)
         self.db.flush()
         for group_number in range(3):

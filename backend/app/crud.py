@@ -15,9 +15,15 @@ def get_classrooms(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Classroom).offset(skip).limit(limit).all()
 
 
-def create_classroom(db: Session, classroom: schemas.ClassroomCreate):
-    db_classroom = models.Classroom(name=classroom.name, instructor_emails=classroom.instructor_emails)
+def create_classroom(db: Session, classroom: schemas.ClassroomCreate, owner_email: str):
+    """Create a classroom owned by `owner_email` (§3: the creator is the owner)."""
+    db_classroom = models.Classroom(name=classroom.name,
+                                    allowed_email_domains=classroom.allowed_email_domains)
     db.add(db_classroom)
+    db.flush()
+    db.add(models.ClassroomStaff(classroom_id=db_classroom.id,
+                                 email=owner_email.strip().lower(), role="OWNER",
+                                 added_at=datetime.now(UTC)))
     db.commit()
     db.refresh(db_classroom)
     return db_classroom

@@ -18,7 +18,7 @@ from tests.support import TestDatabase
 def main() -> None:
     database = TestDatabase()
     with Session(database.engine) as db:
-        classroom = models.Classroom(name="Scale check", instructor_emails="teacher@example.edu")
+        classroom = models.Classroom(name="Scale check")
         db.add(classroom)
         db.flush()
         for group_index in range(10):

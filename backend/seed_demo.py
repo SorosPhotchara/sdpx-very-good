@@ -25,15 +25,23 @@ def seed(target_engine: Engine = engine) -> None:
         for name in PRESERVED_CLASSROOMS:
             existing = db.query(models.Classroom).filter_by(name=name).first()
             if existing is None:
-                db.add(models.Classroom(name=name, instructor_emails=approved[0]))
+                room = models.Classroom(name=name)
+                db.add(room)
+                db.flush()
+                db.add(models.ClassroomStaff(classroom_id=room.id, email=approved[0],
+                                             role="OWNER", added_at=datetime.now(UTC)))
             else:
-                instructors = {email.strip().lower() for email in (existing.instructor_emails or "").split(",") if email.strip()}
-                instructors.add(approved[0])
-                existing.instructor_emails = ",".join(sorted(instructors))
+                held = {member.email for member in existing.staff}
+                if approved[0] not in held:
+                    # Give the allowlisted instructor ownership; a legacy room may
+                    # name somebody who is no longer allowed in.
+                    role = "OWNER" if not any(m.role == "OWNER" for m in existing.staff) else "CO_TEACHER"
+                    db.add(models.ClassroomStaff(classroom_id=existing.id, email=approved[0],
+                                                 role=role, added_at=datetime.now(UTC)))
         db.flush()
         classroom = db.query(models.Classroom).filter_by(name=DEMO_CLASSROOM).first()
         if classroom is None:
-            classroom = models.Classroom(name=DEMO_CLASSROOM, instructor_emails=approved[0])
+            classroom = models.Classroom(name=DEMO_CLASSROOM)
             db.add(classroom)
             db.flush()
         if not db.query(models.Student.id).filter_by(classroom_id=classroom.id).first():

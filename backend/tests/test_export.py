@@ -70,7 +70,7 @@ class ExportTests(unittest.TestCase):
         database = TestDatabase()
         try:
             with Session(database.engine) as db:
-                classroom = models.Classroom(name="Course", instructor_emails="teacher@example.edu")
+                classroom = models.Classroom(name="Course")
                 db.add(classroom)
                 db.flush()
                 group = models.Group(name="=HYPERLINK(\"bad\")", classroom_id=classroom.id)

@@ -28,7 +28,7 @@ def admin_overview(
         "classrooms": [{
             "id": classroom.id,
             "name": classroom.name,
-            "instructors": sorted(email.strip() for email in classroom.instructor_emails.split(",") if email.strip()),
+            "instructors": sorted(f"{member.email} ({member.role})" for member in classroom.staff),
             "student_count": db.query(models.Student.id).filter_by(classroom_id=classroom.id).count(),
             "assignment_count": db.query(models.Assignment.id).filter_by(classroom_id=classroom.id).count(),
         } for classroom in classrooms],

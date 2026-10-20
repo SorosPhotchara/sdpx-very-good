@@ -19,7 +19,8 @@ class ClassroomName(BaseModel):
         return name
 
 class ClassroomBase(ClassroomName):
-    instructor_emails: Optional[str] = ""
+    # FR-AUTH-02: comma separated domains; empty accepts any.
+    allowed_email_domains: Optional[str] = None
 
 class ClassroomRename(ClassroomName):
     pass
@@ -29,6 +30,17 @@ class ClassroomCreate(ClassroomBase):
 
 class Classroom(ClassroomBase):
     id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StaffInvite(BaseModel):
+    email: EmailStr
+    role: str = "CO_TEACHER"
+
+
+class StaffMember(BaseModel):
+    email: str
+    role: str
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..assignment_setup import create_assignment as create_complete_assignment, update_assignment as update_complete_assignment
 from ..auth import Identity, current_identity
-from ..dependencies import get_db, instructor_emails, require_owner, utc_deadline, validate_page
+from ..dependencies import (TEACHERS, get_db, instructor_emails, require_owner, require_teacher,
+                            staff_role, utc_deadline, validate_page)
 from ..instructor_evaluation import assign_pair, assign_student_pair, read_instructor_pairs, save_instructor_vote
 from ..lifecycle import DRAFT, FINALIZED, PUBLISHED, move, record
 from ..publish import build_plan, plan_feasibility, publish, withdraw
@@ -21,7 +22,7 @@ def create_assignment(
     identity: Identity = Depends(current_identity),
     db: Session = Depends(get_db),
 ) -> models.Assignment:
-    require_owner(classroom_id, identity, db)
+    require_teacher(classroom_id, identity, db)
     try:
         return create_complete_assignment(db, classroom_id, payload)
     except ValueError as error:
@@ -38,12 +39,14 @@ def read_assignments(
 ) -> list[models.Assignment]:
     validate_page(skip, limit)
     member = db.query(models.Student.id).filter_by(classroom_id=classroom_id, email=identity.email).first()
-    classroom = db.get(models.Classroom, classroom_id)
-    is_owner = classroom is not None and identity.is_instructor and identity.email in instructor_emails(classroom)
-    if member is None and not is_owner:
-        require_owner(classroom_id, identity, db)
+    role = staff_role(db, classroom_id, identity.email) if identity.is_instructor else None
+    if member is None and role is None:
+        # Neither enrolled nor staff here: answer as though it does not exist.
+        require_teacher(classroom_id, identity, db)
     query = db.query(models.Assignment).filter_by(classroom_id=classroom_id)
-    if not is_owner:
+    if role not in TEACHERS:
+        # A draft is still being set up, so only the teachers who set it up see
+        # it; a TA and a student see what has been published.
         query = query.filter(models.Assignment.status != DRAFT)
     return query.offset(skip).limit(limit).all()
 
@@ -55,7 +58,7 @@ def read_assignment_setup(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     return schemas.AssignmentSetup(
         title=assignment.title, group_score=assignment.group_score,
         individual_score=assignment.individual_score,
@@ -83,7 +86,7 @@ def read_assignment_criteria(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     return db.query(models.Criteria).filter_by(assignment_id=assignment_id).order_by(models.Criteria.id).all()
 
 
@@ -95,18 +98,20 @@ def edit_assignment_setup(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     try:
         return update_complete_assignment(db, assignment, payload)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
 
 
-def _owned_assignment(assignment_id: int, identity: Identity, db: Session) -> models.Assignment:
+def _assignment_for(assignment_id: int, identity: Identity, db: Session,
+                    guard=require_owner) -> models.Assignment:
+    """Load an assignment the caller may act on, at the role `guard` demands."""
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    guard(assignment.classroom_id, identity, db)
     return assignment
 
 
@@ -123,7 +128,7 @@ def unpublish_assignment(
     criteria editable again, but they are kept on the lifecycle event first so
     nothing collected is simply lost (see `withdraw`).
     """
-    assignment = _owned_assignment(assignment_id, identity, db)
+    assignment = _assignment_for(assignment_id, identity, db)
     try:
         event = move(db, assignment, DRAFT, "unpublish", identity.email, payload.reason)
         event.snapshot = withdraw(db, assignment_id)
@@ -145,7 +150,7 @@ def finalize_assignment(
     db: Session = Depends(get_db),
 ) -> dict:
     """Settle the scores and snapshot the calculation (FR-SCORE-09)."""
-    assignment = _owned_assignment(assignment_id, identity, db)
+    assignment = _assignment_for(assignment_id, identity, db)
     try:
         report = assignment_report(db, assignment)
         event = move(db, assignment, FINALIZED, "finalize", identity.email, report=report)
@@ -165,7 +170,7 @@ def reopen_assignment(
     db: Session = Depends(get_db),
 ) -> dict:
     """Undo a finalize so scores can change again; needs a reason (§7.3)."""
-    assignment = _owned_assignment(assignment_id, identity, db)
+    assignment = _assignment_for(assignment_id, identity, db)
     try:
         move(db, assignment, PUBLISHED, "reopen", identity.email, payload.reason)
         db.commit()
@@ -187,7 +192,7 @@ def recompute_assignment(
     and to leave a record that someone asked. A settled assignment is served
     from its snapshot instead, so finalized numbers never move.
     """
-    assignment = _owned_assignment(assignment_id, identity, db)
+    assignment = _assignment_for(assignment_id, identity, db, require_teacher)
     if assignment.status == FINALIZED:
         raise HTTPException(status_code=409,
                             detail="A finalized assignment is served from its snapshot")
@@ -205,7 +210,7 @@ def read_assignment_events(
 ) -> list[dict]:
     """Lifecycle history, newest first. Snapshots are large, so only their
     presence is reported here."""
-    _owned_assignment(assignment_id, identity, db)
+    _assignment_for(assignment_id, identity, db, require_teacher)
     events = (db.query(models.AssignmentEvent).filter_by(assignment_id=assignment_id)
               .order_by(models.AssignmentEvent.id.desc()).all())
     return [{"id": event.id, "action": event.action, "actor": event.actor_email,
@@ -227,7 +232,7 @@ def read_assignment_feasibility(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     try:
         return plan_feasibility(db, assignment_id)
     except ValueError as error:
@@ -243,7 +248,7 @@ def preview_assignment(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     try:
         plan = build_plan(db, assignment_id)
         criteria = {item.id: item for item in db.query(models.Criteria).filter_by(assignment_id=assignment_id)}
@@ -276,7 +281,7 @@ def publish_assignment(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     try:
         return {"pair_assignments": publish(db, assignment_id)}
     except ValueError as error:
@@ -291,8 +296,8 @@ def add_instructor_pair(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    classroom = require_owner(assignment.classroom_id, identity, db)
-    pair = assign_pair(db, assignment, payload, instructor_emails(classroom))
+    classroom = require_teacher(assignment.classroom_id, identity, db)
+    pair = assign_pair(db, assignment, payload, instructor_emails(db, classroom))
     return {"pair_id": pair.id}
 
 
@@ -304,7 +309,7 @@ def add_student_pair(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     pair = assign_student_pair(db, assignment, payload)
     return {"pair_id": pair.id}
 
@@ -316,7 +321,7 @@ def list_instructor_pairs(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     return read_instructor_pairs(db, assignment, identity.email)
 
 
@@ -328,5 +333,5 @@ def record_instructor_vote(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     return save_instructor_vote(db, assignment, pair_id, identity.email, payload.choice)

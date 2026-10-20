@@ -7,9 +7,12 @@ class Classroom(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    instructor_emails = Column(Text, default="")
+    # FR-AUTH-02: comma separated, empty or null means any domain is accepted.
+    allowed_email_domains = Column(Text, nullable=True)
 
     students = relationship("Student", back_populates="classroom")
+    staff = relationship("ClassroomStaff", back_populates="classroom",
+                         cascade="all, delete-orphan")
     groups = relationship("Group", back_populates="classroom")
     assignments = relationship("Assignment", back_populates="classroom")
 
@@ -24,6 +27,26 @@ classroom_archives = Table(
     Column("deleted_by", String, nullable=False),
     Column("snapshot", JSON, nullable=False),
 )
+
+
+class ClassroomStaff(Base):
+    """A classroom's staff and their role, per the §3 permission matrix.
+
+    Separate from `students` on purpose: a student row is an evaluation subject
+    and an evaluator throughout the system, so staff kept there would have to be
+    filtered out of every such query to avoid being evaluated.
+    """
+
+    __tablename__ = "classroom_staff"
+    __table_args__ = (UniqueConstraint("classroom_id", "email", name="uq_classroom_staff_member"),)
+
+    id = Column(Integer, primary_key=True)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False, index=True)
+    email = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+    added_at = Column(DateTime(timezone=True), nullable=True)
+
+    classroom = relationship("Classroom", back_populates="staff")
 
 
 class InstructorApproval(Base):

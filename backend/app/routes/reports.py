@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from .. import models
 from ..auth import Identity, current_identity
-from ..dependencies import get_db, require_owner
+from ..dependencies import get_db, require_owner, require_teacher
 from ..export import export_csv
 from ..reports import assignment_report, raw_pair_responses
 from ..xlsx_export import export_xlsx
@@ -37,7 +37,7 @@ def read_assignment_report(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     return assignment_report(db, assignment)
 
 
@@ -80,7 +80,7 @@ def download_report_csv(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     try:
         content = export_csv(db, assignment, sheet)
     except ValueError as error:
@@ -99,6 +99,6 @@ def download_report_xlsx(
     assignment = db.get(models.Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(404, "Assignment not found")
-    require_owner(assignment.classroom_id, identity, db)
+    require_teacher(assignment.classroom_id, identity, db)
     return Response(export_xlsx(db, assignment), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": _export_disposition(assignment, "report", "xlsx")})
