@@ -58,7 +58,6 @@ def seed(target_engine: Engine = engine) -> None:
             assignment = create_assignment(db, classroom.id, schemas.AssignmentSetup(
                 title=DEMO_ASSIGNMENT,
                 group_score=15, individual_score=5,
-                group_participation_max=2, individual_participation_max=2,
                 group_deadline=deadline, individual_deadline=deadline,
                 group_criteria=[schemas.CriterionInput(name="Quality", weight=100)],
                 individual_criteria=[schemas.CriterionInput(name="Contribution", weight=100)],

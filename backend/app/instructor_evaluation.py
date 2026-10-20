@@ -1,12 +1,14 @@
 """Targeted instructor pair assignments and weighted votes."""
 
 from datetime import UTC, datetime
+from secrets import randbits
 
 from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from . import models, schemas
+from .models import shown_subjects as _shown
 
 
 def deadline_for(assignment: models.Assignment, is_group: bool):
@@ -82,6 +84,7 @@ def assign_pair(db: Session, assignment: models.Assignment, payload: schemas.Ins
         left_id=payload.left_id if not criterion.is_group else None,
         right_id=payload.right_id if not criterion.is_group else None,
         assigned_to_instructor_email=email,
+        display_flipped=randbits(1) == 1,
     )
     db.add(pair)
     db.commit()
@@ -111,6 +114,7 @@ def assign_student_pair(db: Session, assignment: models.Assignment,
         left_id=items[0].id if not criterion.is_group else None,
         right_id=items[1].id if not criterion.is_group else None,
         assigned_to_student_id=student.id,
+        display_flipped=randbits(1) == 1,
     )
     db.add(pair)
     db.commit()
@@ -129,8 +133,9 @@ def read_instructor_pairs(db: Session, assignment: models.Assignment, email: str
     for pair in pairs:
         criterion = criteria[pair.criteria_id]
         model = models.Group if criterion.is_group else models.Student
-        left = db.get(model, pair.left_group_id if criterion.is_group else pair.left_id)
-        right = db.get(model, pair.right_group_id if criterion.is_group else pair.right_id)
+        shown_left, shown_right = _shown(pair, criterion.is_group)   # FR-PAIR-08
+        left = db.get(model, shown_left)
+        right = db.get(model, shown_right)
         deadline = deadline_for(assignment, criterion.is_group)
         result.append({
             "pair_id": pair.id, "section": pair.pair_type, "criterion": criterion.name,

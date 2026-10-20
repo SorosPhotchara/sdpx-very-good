@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator, model_validator
 
+from .scoring import DEFAULT_COMPLETION_THRESHOLD, DEFAULT_SCORE_CEILING, DEFAULT_SCORE_FLOOR
 from .timezone import as_utc
 
 class ClassroomName(BaseModel):
@@ -92,9 +93,14 @@ class AssignmentBase(BaseModel):
     classroom_id: int
     group_score: float = 0.0
     individual_score: float = 0.0
-    group_participation_max: float = 0.0
-    individual_participation_max: float = 0.0
     instructor_weight: float = 1.0
+    score_floor: float = 0.6
+    score_ceiling: float = 1.0
+    completion_threshold: float = 0.9
+    target_coverage: int = 5
+    group_max_workload: int = 8
+    individual_max_workload: int = 21
+    min_comparisons: int = 3
     deadline: Optional[datetime] = None
     group_deadline: Optional[datetime] = None
     individual_deadline: Optional[datetime] = None
@@ -103,8 +109,7 @@ class AssignmentBase(BaseModel):
     @computed_field(return_type=float)
     @property
     def total_score(self) -> float:
-        return (self.group_score + self.individual_score
-                + self.group_participation_max + self.individual_participation_max)
+        return self.group_score + self.individual_score
 
     @field_validator("deadline", "group_deadline", "individual_deadline", "published_at", mode="before")
     @classmethod
@@ -165,10 +170,16 @@ class AssignmentSetup(BaseModel):
     title: str
     group_score: float = 0.0
     individual_score: float = 0.0
-    group_participation_max: float = 0.0
-    individual_participation_max: float = 0.0
     total_score: float | None = None
     instructor_weight: float = 1.0
+    # Omitted means "keep whatever the assignment already has" (§9.3, §9.4).
+    score_floor: float | None = None
+    score_ceiling: float | None = None
+    completion_threshold: float | None = None
+    target_coverage: int | None = None
+    group_max_workload: int | None = None
+    individual_max_workload: int | None = None
+    min_comparisons: int | None = None
     group_deadline: datetime | None = None
     individual_deadline: datetime | None = None
     group_criteria: list[CriterionInput] = Field(default_factory=list)
@@ -176,12 +187,26 @@ class AssignmentSetup(BaseModel):
 
     @model_validator(mode="after")
     def total_matches_section_maxima(self) -> "AssignmentSetup":
-        maxima = (self.group_score, self.individual_score,
-                  self.group_participation_max, self.individual_participation_max)
+        maxima = (self.group_score, self.individual_score)
         if any(not isfinite(value) or value < 0 for value in maxima):
             raise ValueError("Score maxima must be finite and nonnegative")
         if not isfinite(self.instructor_weight) or self.instructor_weight <= 0:
             raise ValueError("Instructor weight must be finite and positive")
+        floor = DEFAULT_SCORE_FLOOR if self.score_floor is None else self.score_floor
+        ceiling = DEFAULT_SCORE_CEILING if self.score_ceiling is None else self.score_ceiling
+        if not all(isfinite(value) for value in (floor, ceiling)) or not 0 <= floor < ceiling <= 1:
+            raise ValueError("Score band needs 0 <= score_floor < score_ceiling <= 1")
+        threshold = (DEFAULT_COMPLETION_THRESHOLD if self.completion_threshold is None
+                     else self.completion_threshold)
+        if not isfinite(threshold) or not 0 < threshold <= 1:
+            raise ValueError("Completion threshold must be within (0, 1]")
+        limits = (("target_coverage", self.target_coverage, 1, 20),
+                  ("group_max_workload", self.group_max_workload, 1, 30),
+                  ("individual_max_workload", self.individual_max_workload, 1, 100),
+                  ("min_comparisons", self.min_comparisons, 1, 50))
+        for name, value, low, high in limits:
+            if value is not None and not low <= value <= high:
+                raise ValueError(f"{name} must be between {low} and {high}")
         expected = sum(maxima)
         if self.total_score is not None and (
             not isfinite(self.total_score)
@@ -194,7 +219,7 @@ class AssignmentSetup(BaseModel):
 
 class DraftChange(BaseModel):
     pair_id: int
-    choice: int | None = Field(default=None, ge=1, le=5)
+    choice: int | None = Field(default=None, ge=1, le=6)
 
 
 class DraftChanges(BaseModel):
@@ -229,7 +254,7 @@ class StudentPairRequest(BaseModel):
 
 
 class InstructorVoteRequest(BaseModel):
-    choice: int = Field(ge=1, le=5)
+    choice: int = Field(ge=1, le=6)
 
 
 class GroupReassignmentRequest(BaseModel):

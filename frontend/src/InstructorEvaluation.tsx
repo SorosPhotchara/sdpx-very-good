@@ -10,8 +10,7 @@ import { ToastNotice, useNotice } from './components/ui/toast'
 import { Button } from './components/ui/button'
 import { Input } from './components/ui/input'
 import { DisclosureSummary } from './components/ui/disclosure-summary'
-
-const choices = ['Strongly left', 'Slightly left', 'Equal', 'Slightly right', 'Strongly right']
+import { choices } from './choices'
 const pageSize = 8
 const pairKey = (criterionId: number, leftId: number, rightId: number) => `${criterionId}:${Math.min(leftId, rightId)}:${Math.max(leftId, rightId)}`
 
@@ -220,7 +219,7 @@ function InstructorEvaluationContent({ assignmentId, classroomId, email }: {
           const right = row.section === 'group' ? groups.find((item) => item.id === row.right_id)?.name : students.find((item) => item.id === row.right_id)?.email
           return <label key={key} className={`flex cursor-pointer items-start gap-3 p-3 sm:items-center ${assigned ? 'bg-slate-50/70' : 'hover:bg-indigo-50/50'}`}>
             <input type="checkbox" checked={assigned || selectedKeys.has(key)} disabled={assigned || action.busy || sectionClosed} onChange={(event) => setSelectedKeys((current) => { const next = new Set(current); if (event.target.checked) next.add(key); else next.delete(key); return next })} className="mt-1 size-4 shrink-0 accent-primary sm:mt-0" aria-label={`${left} / ${right}`} />
-            <span className="min-w-0 flex-1"><span className="block break-words font-medium text-foreground">{left} <span className="px-1 text-muted-foreground">vs</span> {right}</span><span className="block text-xs text-muted-foreground">{language === 'th' ? `นักศึกษาส่งแล้ว ${row.votes}/${row.target_evaluations}` : `Student responses ${row.votes}/${row.target_evaluations}`}{row.shortage_to_five > 0 ? (language === 'th' ? ` · ผู้มีสิทธิ์ไม่ครบ 5 คน` : ` · fewer than 5 eligible`) : ''}</span></span>
+            <span className="min-w-0 flex-1"><span className="block break-words font-medium text-foreground">{left} <span className="px-1 text-muted-foreground">vs</span> {right}</span><span className="block text-xs text-muted-foreground">{language === 'th' ? `นักศึกษาส่งแล้ว ${row.votes}/${row.target_evaluations}` : `Student responses ${row.votes}/${row.target_evaluations}`}{row.shortage_to_target > 0 ? (language === 'th' ? ` · ต่ำกว่าเป้า coverage` : ` · below the coverage target`) : ''}</span></span>
             {assigned && <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">{language === 'th' ? 'มอบหมายแล้ว' : 'Assigned'}</span>}
           </label>
         })}

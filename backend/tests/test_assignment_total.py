@@ -8,10 +8,11 @@ from app.schemas import AssignmentSetup
 
 class AssignmentTotalTests(unittest.TestCase):
     def test_total_is_derived_and_rejects_a_mismatch(self) -> None:
-        fields = dict(group_score=10, individual_score=4,
-                      group_participation_max=2, individual_participation_max=1)
-        self.assertEqual(AssignmentSetup(title="Review", **fields).total_score, 17)
-        self.assertEqual(AssignmentSetup(title="Review", total_score=17, **fields).total_score, 17)
+        # Participation is a multiplier now (§9.4), so an assignment's maximum is
+        # the two work sections and nothing else.
+        fields = dict(group_score=10, individual_score=4)
+        self.assertEqual(AssignmentSetup(title="Review", **fields).total_score, 14)
+        self.assertEqual(AssignmentSetup(title="Review", total_score=14, **fields).total_score, 14)
         with self.assertRaises(ValidationError):
             AssignmentSetup(title="Review", total_score=18, **fields)
 

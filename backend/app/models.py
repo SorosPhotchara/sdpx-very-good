@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Table, Text, UniqueConstraint, and_, func, text
+from sqlalchemy import JSON, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Table, Text, UniqueConstraint, and_, func, text
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -67,9 +67,21 @@ class Assignment(Base):
     classroom_id = Column(Integer, ForeignKey("classrooms.id"))
     group_score = Column(Float, default=0.0)
     individual_score = Column(Float, default=0.0)
-    group_participation_max = Column(Float, default=0.0)
-    individual_participation_max = Column(Float, default=0.0)
     instructor_weight = Column(Float, default=1.0)
+    # Band mapping bounds for this assignment (§9.3). Scores land in
+    # [score_floor, score_ceiling] of each section maximum.
+    score_floor = Column(Float, default=0.6, nullable=False)
+    score_ceiling = Column(Float, default=1.0, nullable=False)
+    # Submitting this share of assigned comparisons keeps the whole personal
+    # score; below it the participation multiplier scales the score down (§9.4).
+    completion_threshold = Column(Float, default=0.9, nullable=False)
+    # Pairing policy the feasibility solver reads (§8.1). The two workload
+    # ceilings differ on purpose: see FR-PAIR-14.
+    target_coverage = Column(Integer, default=5, nullable=False)
+    group_max_workload = Column(Integer, default=8, nullable=False)
+    individual_max_workload = Column(Integer, default=21, nullable=False)
+    min_comparisons = Column(Integer, default=3, nullable=False)
+    pairing_seed = Column(BigInteger, nullable=True)
     deadline = Column(DateTime, nullable=True)
     group_deadline = Column(DateTime(timezone=True), nullable=True)
     individual_deadline = Column(DateTime(timezone=True), nullable=True)
@@ -103,6 +115,9 @@ class Pair(Base):
     assigned_to_student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
     assigned_to_instructor_email = Column(String, nullable=True)
     pair_type = Column(String, default="individual")
+    # FR-PAIR-08 / D8: true when the evaluator saw right_* on the left. The stored
+    # choice is in display order, so scoring MUST undo this before awarding points.
+    display_flipped = Column(Boolean, default=False, nullable=False)
     assigned_count = Column(Integer, default=0)
     superseded_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -130,6 +145,19 @@ _active_pair_index("uq_pairs_active_instructor_group", func.lower(func.trim(Pair
                    Pair.left_group_id, Pair.right_group_id, "group", False)
 _active_pair_index("uq_pairs_active_instructor_individual", func.lower(func.trim(Pair.assigned_to_instructor_email)),
                    Pair.left_id, Pair.right_id, "individual", False)
+
+
+def shown_subjects(pair: Pair, is_group: bool) -> tuple[int, int]:
+    """A pair's subjects in the order the evaluator actually saw them.
+
+    Pairs are stored in a canonical order but displayed in a randomised one
+    (FR-PAIR-08 / D8), and a recorded choice is relative to what was shown, so
+    every read of a choice MUST go through here or the points land on the wrong
+    subject.
+    """
+    left = pair.left_group_id if is_group else pair.left_id
+    right = pair.right_group_id if is_group else pair.right_id
+    return (right, left) if pair.display_flipped else (left, right)
 
 
 class DraftChoice(Base):

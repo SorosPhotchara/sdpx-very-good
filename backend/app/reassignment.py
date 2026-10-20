@@ -200,6 +200,7 @@ def reassign(db: Session, classroom_id: int, student_id: int, target_group_id: i
                 right_group_id=allocation.right_id if allocation.kind == "group" else None,
                 left_id=allocation.left_id if allocation.kind == "individual" else None,
                 right_id=allocation.right_id if allocation.kind == "individual" else None,
+                display_flipped=allocation.flipped,
             ))
         db.add(models.Reassignment(
             classroom_id=classroom_id, student_id=student.id, old_group_id=old_group_id,

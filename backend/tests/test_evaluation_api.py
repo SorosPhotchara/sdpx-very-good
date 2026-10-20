@@ -33,7 +33,7 @@ class EvaluationApiTests(unittest.TestCase):
         )
         self.assertEqual(self.client.post(f"/classrooms/{classroom_id}/roster/import", json={"csv_text": roster}).json()["imported"], 12)
         self.assignment_id = self.client.post(f"/classrooms/{classroom_id}/assignments", json={
-            "title": "Review", "group_score": 10, "group_participation_max": 5,
+            "title": "Review", "group_score": 10,
             "group_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
             "group_criteria": [{"name": "Quality", "weight": 100}],
         }).json()["id"]
@@ -55,6 +55,163 @@ class EvaluationApiTests(unittest.TestCase):
 
     def sign_in(self, email: str, instructor: bool = False) -> None:
         app.dependency_overrides[current_identity] = lambda: Identity(subject=email, email=email, is_instructor=instructor)
+
+    def _answer_one_group_pair(self, assignment_id: int, choice: int) -> None:
+        """Submit a single group answer on one of the assignment's pairs."""
+        with Session(self.engine) as db:
+            pair = db.query(models.Pair).filter_by(assignment_id=assignment_id).first()
+            email = db.get(models.Student, pair.assigned_to_student_id).email
+            pair_id = pair.id
+        self.sign_in(email)
+        path = f"/assignments/{assignment_id}/evaluation/group"
+        self.assertEqual(self.client.put(path + "/draft", json={
+            "changes": [{"pair_id": pair_id, "choice": choice}]}).status_code, 200)
+        self.assertEqual(self.client.post(path + "/submit").status_code, 200)
+
+    def _scored_groups(self, assignment_id: int) -> list[float]:
+        self.sign_in("teacher@example.edu", True)
+        report = self.client.get(f"/assignments/{assignment_id}/report").json()
+        return sorted(round(group["work_score"], 6) for group in report["groups"]
+                      if group["work_score"] is not None)
+
+    def test_group_work_scores_use_the_assignments_own_band(self) -> None:
+        # One answer at the top of the scale, so the favoured group lands on the
+        # band ceiling and the other on its floor: the band becomes observable
+        # end to end rather than only inside the scoring unit tests.
+        self._answer_one_group_pair(self.assignment_id, 1)
+        self.assertEqual(self._scored_groups(self.assignment_id), [6.0, 10.0])
+
+        # The same answer on an assignment with a wider band must score
+        # differently, which only holds if the band is read per assignment.
+        wide = self.client.post(f"/classrooms/{self.classroom_id}/assignments", json={
+            "title": "Wide band", "group_score": 10,
+            "score_floor": 0.0, "score_ceiling": 1.0,
+            "group_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
+            "group_criteria": [{"name": "Quality", "weight": 100}],
+        }).json()["id"]
+        self.assertEqual(self.client.post(f"/assignments/{wide}/publish").status_code, 200)
+        self._answer_one_group_pair(wide, 1)
+        self.assertEqual(self._scored_groups(wide), [0.0, 10.0])
+
+    def test_feasibility_reports_the_achievable_plan_before_publishing(self) -> None:
+        # FR-PAIR-04: groups of 3, 3, 4 and 2 make 6 pairs among 12 students, so
+        # the coverage target of 5 is reachable at 3 pairs per student.
+        self.sign_in("teacher@example.edu", True)
+        plan = self.client.get(f"/assignments/{self.assignment_id}/feasibility")
+        self.assertEqual(plan.status_code, 200)
+        body = plan.json()
+        self.assertEqual((body["students"], body["groups"], body["target_coverage"]), (12, 4, 5))
+        self.assertEqual(body["group"]["pairs"], 6)
+        self.assertEqual(body["group"]["coverage"], 5)
+        self.assertEqual(body["group"]["workload"], 3)
+        self.assertFalse(body["group"]["reduced"])
+        self.assertEqual(body["group"]["reason"], "")
+        self.assertEqual(body["group"]["criteria"], 1)
+        self.assertEqual(body["group"]["total_comparisons"], 30)
+        # The two-member group can hold no individual evaluation at all.
+        two = next(item for item in body["individual"]["groups"] if item["members"] == 2)
+        self.assertFalse(two["feasible"])
+        self.assertIn("อย่างน้อย 3 คน", two["reason"])
+
+        self.sign_in(self.email)
+        self.assertEqual(
+            self.client.get(f"/assignments/{self.assignment_id}/feasibility").status_code, 403)
+
+    def test_feasibility_explains_a_reduced_coverage_target(self) -> None:
+        # §8.2 example 2: three groups of four leave each pair only one eligible
+        # evaluator's worth of workload, so the target has to come down.
+        self.sign_in("teacher@example.edu", True)
+        classroom_id = self.client.post("/classrooms/", json={"name": "Small"}).json()["id"]
+        roster = "email,groupname\n" + "\n".join(
+            f"s{group}{index}@small.edu,{group}"
+            for group in ("A", "B", "C") for index in range(4))
+        self.assertEqual(self.client.post(f"/classrooms/{classroom_id}/roster/import",
+                                         json={"csv_text": roster}).json()["imported"], 12)
+        small = self.client.post(f"/classrooms/{classroom_id}/assignments", json={
+            "title": "Small room", "group_score": 10,
+            "group_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
+            "group_criteria": [{"name": "Quality", "weight": 100}],
+        }).json()["id"]
+        body = self.client.get(f"/assignments/{small}/feasibility").json()
+        self.assertEqual(body["group"]["coverage"], 4)      # not the requested 5
+        self.assertEqual(body["group"]["workload"], 1)
+        self.assertTrue(body["group"]["reduced"])
+        self.assertIn("4 ครั้งต่อคู่", body["group"]["reason"])
+
+    def test_participation_multiplier_scales_only_the_personal_score(self) -> None:
+        self._answer_one_group_pair(self.assignment_id, 1)
+        self.sign_in("teacher@example.edu", True)
+        report = self.client.get(f"/assignments/{self.assignment_id}/report").json()
+
+        # Group evaluation never shows a student their own group, so the two
+        # groups that got compared contain nobody who answered anything.
+        scored = [item for item in report["groups"] if item["work_score"] is not None]
+        self.assertEqual(len(scored), 2)
+        member = next(row for row in report["students"]
+                      if row["group_id"] == scored[0]["group_id"])
+        self.assertEqual(member["submitted_comparisons"], 0)
+        self.assertGreater(member["assigned_comparisons"], 0)
+        self.assertEqual(member["participation_multiplier"], 0.0)
+        self.assertEqual(member["final_score"], 0.0)
+        # D5 / FR-SCORE-11: the group keeps its score regardless.
+        self.assertAlmostEqual(member["group_work_score"], scored[0]["work_score"])
+        self.assertIn(round(scored[0]["work_score"], 6), (6.0, 10.0))
+
+        # The student who did answer is in a third group, which has no
+        # comparisons yet, so their personal total is absent rather than zero.
+        answered = next(row for row in report["students"]
+                        if row["submitted_comparisons"] > 0)
+        self.assertGreater(answered["participation_multiplier"], 0)
+        self.assertIsNone(answered["group_work_score"])
+        self.assertIsNone(answered["final_score"])
+
+    def test_completion_threshold_is_configurable_and_validated(self) -> None:
+        self.sign_in("teacher@example.edu", True)
+        lenient = self.client.post(f"/classrooms/{self.classroom_id}/assignments", json={
+            "title": "Lenient", "group_score": 10,
+            "completion_threshold": 0.5,
+            "group_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
+            "group_criteria": [{"name": "Quality", "weight": 100}],
+        }).json()["id"]
+        self.assertEqual(
+            self.client.get(f"/assignments/{lenient}/setup").json()["completion_threshold"], 0.5)
+        for threshold in (0, -0.2, 1.5):
+            response = self.client.post(f"/classrooms/{self.classroom_id}/assignments", json={
+                "title": "Bad threshold", "group_score": 10,
+                "completion_threshold": threshold,
+                "group_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
+                "group_criteria": [{"name": "Quality", "weight": 100}],
+            })
+            self.assertEqual(response.status_code, 422, threshold)
+
+    def test_setup_round_trip_keeps_a_configured_band(self) -> None:
+        self.sign_in("teacher@example.edu", True)
+        narrow = self.client.post(f"/classrooms/{self.classroom_id}/assignments", json={
+            "title": "Narrow band", "group_score": 10,
+            "score_floor": 0.25, "score_ceiling": 0.75,
+            "group_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
+            "group_criteria": [{"name": "Quality", "weight": 100}],
+        }).json()["id"]
+        setup = self.client.get(f"/assignments/{narrow}/setup").json()
+        self.assertEqual((setup["score_floor"], setup["score_ceiling"]), (0.25, 0.75))
+
+        # A setup PUT that omits the band must leave it alone rather than
+        # silently restoring the defaults.
+        del setup["score_floor"], setup["score_ceiling"]
+        self.assertEqual(self.client.put(f"/assignments/{narrow}/setup", json=setup).status_code, 200)
+        kept = self.client.get(f"/assignments/{narrow}/setup").json()
+        self.assertEqual((kept["score_floor"], kept["score_ceiling"]), (0.25, 0.75))
+
+    def test_invalid_band_is_rejected(self) -> None:
+        self.sign_in("teacher@example.edu", True)
+        for floor, ceiling in ((0.8, 0.8), (0.9, 0.4), (-0.1, 1.0), (0.5, 1.5)):
+            response = self.client.post(f"/classrooms/{self.classroom_id}/assignments", json={
+                "title": "Bad band", "group_score": 10,
+                "score_floor": floor, "score_ceiling": ceiling,
+                "group_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
+                "group_criteria": [{"name": "Quality", "weight": 100}],
+            })
+            self.assertEqual(response.status_code, 422, (floor, ceiling))
 
     def test_draft_submit_and_latest_snapshot(self) -> None:
         self.sign_in(self.email)
@@ -85,7 +242,8 @@ class EvaluationApiTests(unittest.TestCase):
         self.sign_in("outsider@example.edu")
         self.assertEqual(self.client.get(self.path).status_code, 403)
         self.sign_in(self.email)
-        self.assertEqual(self.client.put(self.path + "/draft", json={"changes": [{"pair_id": self.pair_id, "choice": 6}]}).status_code, 422)
+        self.assertEqual(self.client.put(self.path + "/draft", json={"changes": [{"pair_id": self.pair_id, "choice": 7}]}).status_code, 422)
+        self.assertEqual(self.client.put(self.path + "/draft", json={"changes": [{"pair_id": self.pair_id, "choice": 6}]}).status_code, 200)
         with Session(self.engine) as db:
             assignment = db.get(models.Assignment, self.assignment_id)
             assignment.group_deadline = datetime.now(UTC) - timedelta(minutes=1)
@@ -119,7 +277,8 @@ class EvaluationApiTests(unittest.TestCase):
         self.client.post(self.path + "/submit")
         after = self.client.get(f"/assignments/{self.assignment_id}/my-scores").json()
         self.assertIsNone(after["group_work_score"])
-        self.assertGreater(after["group_participation_score"], 0)
+        self.assertGreater(after["submitted_comparisons"], 0)
+        self.assertGreater(after["participation_multiplier"], 0)
         self.assertNotIn("students", after)
         self.sign_in("teacher@example.edu", True)
         report = self.client.get(f"/assignments/{self.assignment_id}/report").json()
@@ -131,7 +290,7 @@ class EvaluationApiTests(unittest.TestCase):
         voted = next(row for row in report["coverage"] if {row["left_id"], row["right_id"]} == pair_ids)
         self.assertEqual(voted["votes"], 1)
         self.assertEqual(voted["missing_to_target"], voted["target_evaluations"] - 1)
-        self.assertEqual(voted["shortage_to_five"], 5 - voted["target_evaluations"])
+        self.assertEqual(voted["shortage_to_target"], max(0, 5 - voted["target_evaluations"]))
         exported = self.client.get(f"/assignments/{self.assignment_id}/report/pairs.csv")
         self.assertEqual(exported.status_code, 200)
         self.assertIn("Evaluator 1", exported.text)
@@ -162,7 +321,7 @@ class EvaluationApiTests(unittest.TestCase):
             self.assertIn(row["left"], group_names)
             self.assertIn(row["right"], group_names)
 
-    def test_individual_summary_export_totals_work_and_participation(self) -> None:
+    def test_individual_summary_export_scales_work_by_participation(self) -> None:
         import csv
         from io import StringIO
 
@@ -172,13 +331,21 @@ class EvaluationApiTests(unittest.TestCase):
         self.sign_in("teacher@example.edu", True)
         content = self.client.get(f"/assignments/{self.assignment_id}/report/students.csv").text
         rows = {row["email"]: row for row in csv.DictReader(StringIO(content))}
-        self.assertIn("total_score", rows[self.email])
-        submitter = rows[self.email]
-        parts = [submitter[field] for field in
-                 ("group_work_score", "individual_work_score", "group_participation_score", "individual_participation_score")]
-        expected = sum(float(value) for value in parts if value != "")
-        self.assertAlmostEqual(float(submitter["total_score"]), expected)
-        self.assertGreater(float(submitter["total_score"]), 0)
+        for column in ("assigned_comparisons", "submitted_comparisons",
+                       "participation_multiplier", "final_score"):
+            self.assertIn(column, rows[self.email])
+
+        # Someone in a compared group has a work score, so their personal total
+        # has to be that score scaled by their own multiplier (§9.4).
+        scored = next(row for row in rows.values() if row["group_work_score"] != "")
+        self.assertAlmostEqual(float(scored["final_score"]),
+                               float(scored["group_work_score"])
+                               * float(scored["participation_multiplier"]))
+
+        # The one evaluator is in a third group, which has no comparisons yet, so
+        # their total is blank rather than zero.
+        self.assertEqual(rows[self.email]["group_work_score"], "")
+        self.assertEqual(rows[self.email]["final_score"], "")
 
     def test_raw_pair_report_shows_latest_evaluator_answer_only_to_instructor(self) -> None:
         path = f"/assignments/{self.assignment_id}/report/raw-pairs"
@@ -277,7 +444,7 @@ class EvaluationApiTests(unittest.TestCase):
         covered = next(row for row in report["coverage"] if {row["left_id"], row["right_id"]} ==
                        {groups["A"], groups["B"]})
         self.assertEqual((covered["votes"], covered["missing_to_target"],
-                          covered["shortage_to_five"]), (1, 4, 0))
+                          covered["shortage_to_target"]), (1, 4, 0))
 
     def test_instructor_assigns_extra_individual_pair_to_unused_peer(self) -> None:
         self.sign_in("teacher@example.edu", True)
@@ -288,8 +455,12 @@ class EvaluationApiTests(unittest.TestCase):
         )
         self.assertEqual(self.client.post(f"/classrooms/{classroom_id}/roster/import",
                                           json={"csv_text": roster}).json()["imported"], 10)
+        # Complete enumeration would hand every eligible peer a pair (D4), leaving
+        # nobody for the instructor to add. A workload ceiling of 8 makes
+        # FR-PAIR-14 reduce coverage to 2 of the 6 eligible peers instead.
         individual_id = self.client.post(f"/classrooms/{classroom_id}/assignments", json={
             "title": "Individual", "individual_score": 10,
+            "individual_max_workload": 8,
             "individual_deadline": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
             "individual_criteria": [{"name": "Contribution", "weight": 100}],
         }).json()["id"]
@@ -308,7 +479,7 @@ class EvaluationApiTests(unittest.TestCase):
         individual_path = f"/assignments/{individual_id}/student-pairs"
         individual = {"criteria_id": criterion_id, "left_id": left_id,
                       "right_id": right_id, "student_id": spare}
-        self.assertEqual(len(assigned), 5)
+        self.assertEqual(len(assigned), 2)
         self.assertEqual(self.client.post(individual_path, json={**individual, "student_id": next(iter(assigned)),
                                                                   "left_id": right_id, "right_id": left_id}).status_code, 409)
         self.assertEqual(self.client.post(individual_path, json=individual).status_code, 200)

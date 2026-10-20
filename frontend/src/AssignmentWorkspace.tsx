@@ -5,8 +5,8 @@ import { useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, X } from 'lucide-react'
 import {
-  createAssignment, getAssignments, getAssignmentSetup, previewAssignment, publishAssignment, updateAssignmentSetup,
-  type Assignment, type AssignmentSetup, type PairPreview, type PairPreviewItem,
+  createAssignment, getAssignmentFeasibility, getAssignments, getAssignmentSetup, previewAssignment, publishAssignment, updateAssignmentSetup,
+  type Assignment, type AssignmentSetup, type Feasibility, type PairPreview, type PairPreviewItem,
 } from './api'
 import { StudentEvaluationPages } from './EvaluationWorkspace'
 import { ScoreWorkspace } from './ScoreWorkspace'
@@ -19,7 +19,6 @@ import { ToastNotice, useDismissActiveNotice, useNotice } from './components/ui/
 type CriterionDraft = { name: string; weight: string }
 type SectionDraft = {
   score: string
-  participation: string
   deadline: string
   criteria: CriterionDraft[]
 }
@@ -36,16 +35,13 @@ function SectionEditor({
   const updateCriterion = (index: number, changes: Partial<CriterionDraft>) => {
     update({ criteria: value.criteria.map((item, current) => current === index ? { ...item, ...changes } : item) })
   }
-  const active = Number(value.score) > 0 || Number(value.participation) > 0
+  const active = Number(value.score) > 0
   const totalWeight = value.criteria.reduce((total, item) => total + Number(item.weight || 0), 0)
 
   return <fieldset className="assignment-section grid gap-3 rounded-xl border border-slate-200 p-4">
     <legend className="font-medium">{title}</legend>
     <label className="block text-sm">{t('Work score maximum')}
       <Input type="number" min="0" value={value.score} onChange={(event) => update({ score: event.target.value })} className="mt-1" />
-    </label>
-    <label className="block text-sm">{t('Participation maximum')}
-      <Input type="number" min="0" value={value.participation} onChange={(event) => update({ participation: event.target.value })} className="mt-1" />
     </label>
     <label className="block text-sm">{t('Deadline')}
       <Input type="datetime-local" required={active} value={value.deadline} onChange={(event) => update({ deadline: event.target.value })} className="mt-1" />
@@ -75,6 +71,41 @@ function toLocalInput(value: string | null): string {
   const date = new Date(value)
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 }
+
+function FeasibilityPanel({ plan }: { plan: Feasibility }) {
+  const { language } = useLanguage()
+  const th = language === 'th'
+  const reduced = [plan.group, ...plan.individual.groups].filter((side) => side.reduced && side.reason)
+  const infeasible = [plan.group, ...plan.individual.groups].filter((side) => !side.feasible && side.reason)
+
+  // FR-PAIR-04/05: the numbers an instructor needs before committing, and the
+  // reason in words when the target could not be met.
+  return <section className="pair-plan-preview" data-testid="feasibility-panel"
+    aria-label={th ? 'ความเป็นไปได้ของแผนประเมิน' : 'Evaluation plan feasibility'}>
+    <div className="pair-plan-heading">
+      <div><strong>{th ? 'แผนที่ทำได้จริง' : 'Achievable plan'}</strong>
+        <p>{th ? `${plan.students} คน · ${plan.groups} กลุ่ม · เป้า coverage ${plan.target_coverage}`
+              : `${plan.students} students · ${plan.groups} groups · coverage target ${plan.target_coverage}`}</p></div>
+    </div>
+    <ul className="grid gap-1 p-3 text-sm">
+      {plan.group.criteria > 0 && <li>
+        <strong>{th ? 'ประเมินกลุ่ม' : 'Group'}:</strong>{' '}
+        {th ? `coverage ${plan.group.coverage} ครั้งต่อคู่ · ${plan.group.workload} คู่ต่อคนต่อเกณฑ์ · ${plan.group.total_comparisons} คำตอบรวม`
+            : `coverage ${plan.group.coverage} per pair · ${plan.group.workload} pairs per student per criterion · ${plan.group.total_comparisons} answers in total`}
+      </li>}
+      {plan.individual.criteria > 0 && plan.individual.groups.map((side) => <li key={side.group_id}>
+        <strong>{th ? `รายบุคคล (${side.members} คน)` : `Individual (${side.members} members)`}:</strong>{' '}
+        {side.feasible
+          ? (th ? `coverage ${side.coverage} ครั้งต่อคู่ · ${side.workload} คู่ต่อคนต่อเกณฑ์`
+                : `coverage ${side.coverage} per pair · ${side.workload} pairs per student per criterion`)
+          : (th ? 'ไม่มีการประเมินรายบุคคล' : 'no individual evaluation')}
+      </li>)}
+    </ul>
+    {[...infeasible, ...reduced].map((side, index) => <p key={index} role="status"
+      className="px-3 pb-3 text-sm text-amber-900" data-testid="feasibility-reason">{side.reason}</p>)}
+  </section>
+}
+
 
 function PairPreviewPanel({ preview }: { preview: PairPreview }) {
   const { language } = useLanguage()
@@ -108,8 +139,8 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
   const resource = useResource(`${classroomId}`, () => getAssignments(classroomId))
   const assignments = resource.data ?? []
   const [title, setTitle] = useState('')
-  const [group, setGroup] = useState<SectionDraft>({ score: '10', participation: '0', deadline: '', criteria: [{ name: 'Quality', weight: '100' }] })
-  const [individual, setIndividual] = useState<SectionDraft>({ score: '0', participation: '0', deadline: '', criteria: [] })
+  const [group, setGroup] = useState<SectionDraft>({ score: '10', deadline: '', criteria: [{ name: 'Quality', weight: '100' }] })
+  const [individual, setIndividual] = useState<SectionDraft>({ score: '0', deadline: '', criteria: [] })
   const [instructorWeight, setInstructorWeight] = useState('1')
   const [status, setStatus] = useNotice()
   const dismissActiveNotice = useDismissActiveNotice()
@@ -118,16 +149,18 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
   const [editId, setEditId] = useState<number | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [pairPreviews, setPairPreviews] = useState<Record<number, PairPreview>>({})
+  const [feasibility, setFeasibility] = useState<Record<number, Feasibility>>({})
   const [pairAction, setPairAction] = useState<{ id: number; publish: boolean } | null>(null)
+  // Participation scales the personal score rather than adding to it (§9.4),
+  // so an assignment's maximum is the two work sections.
   const totalScore = Number(group.score || 0) + Number(individual.score || 0)
-    + Number(group.participation || 0) + Number(individual.participation || 0)
 
   function openCreateEditor() {
     dismissActiveNotice()
     setEditId(null)
     setTitle('')
-    setGroup({ score: '10', participation: '0', deadline: '', criteria: [{ name: 'Quality', weight: '100' }] })
-    setIndividual({ score: '0', participation: '0', deadline: '', criteria: [] })
+    setGroup({ score: '10', deadline: '', criteria: [{ name: 'Quality', weight: '100' }] })
+    setIndividual({ score: '0', deadline: '', criteria: [] })
     setInstructorWeight('1')
     setStatus('')
     setEditorOpen(true)
@@ -137,7 +170,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
     event.preventDefault()
     if (busy) return
     for (const [section, label] of [[group, t('Group evaluation')], [individual, t('Individual evaluation')]] as const) {
-      const active = Number(section.score) > 0 || Number(section.participation) > 0
+      const active = Number(section.score) > 0
       const total = section.criteria.reduce((sum, item) => sum + Number(item.weight || 0), 0)
       if (active && Math.abs(total - 100) >= 0.001) {
         setStatus(language === 'th'
@@ -152,8 +185,6 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
       title,
       group_score: Number(group.score),
       individual_score: Number(individual.score),
-      group_participation_max: Number(group.participation),
-      individual_participation_max: Number(individual.participation),
       total_score: totalScore,
       instructor_weight: Number(instructorWeight),
       group_deadline: toDeadline(group.deadline),
@@ -182,7 +213,6 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
       setTitle(setup.title)
       const section = (prefix: 'group' | 'individual'): SectionDraft => ({
         score: String(setup[`${prefix}_score`]),
-        participation: String(setup[`${prefix}_participation_max`]),
         deadline: toLocalInput(setup[`${prefix}_deadline`]),
         criteria: setup[`${prefix}_criteria`].map((item) => ({ name: item.name, weight: String(item.weight) })),
       })
@@ -202,6 +232,7 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
     if (busy) return
     if (!shouldPublish && pairPreviews[assignmentId]) {
       setPairPreviews((current) => { const next = { ...current }; delete next[assignmentId]; return next })
+      setFeasibility((current) => { const next = { ...current }; delete next[assignmentId]; return next })
       setStatus('')
       return
     }
@@ -211,6 +242,10 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
       if (!shouldPublish) {
         const result = await previewAssignment(assignmentId)
         setPairPreviews((current) => ({ ...current, [assignmentId]: result }))
+        // Shown with the preview, because the reduction reason is what decides
+        // whether an instructor wants to publish this plan at all.
+        const plan = await getAssignmentFeasibility(assignmentId).catch(() => null)
+        if (plan) setFeasibility((current) => ({ ...current, [assignmentId]: plan }))
         setStatus(language === 'th' ? `ตัวอย่างแผนมี ${result.pair_assignments} งานประเมิน` : `Preview contains ${result.pair_assignments} pair assignments.`, 'info')
         return
       }
@@ -246,7 +281,9 @@ export function AssignmentWorkspace({ classroomId, isInstructor, email, actionTa
         </>}
         {assignment.published_at && <span className="text-primary">{t('Published')}</span>}
       </span>}
-      {isInstructor && pairPreviews[assignment.id] && <div id={`pair-preview-${assignment.id}`}><PairPreviewPanel preview={pairPreviews[assignment.id]} /></div>}
+      {isInstructor && pairPreviews[assignment.id] && <div id={`pair-preview-${assignment.id}`}>
+        {feasibility[assignment.id] && <FeasibilityPanel plan={feasibility[assignment.id]} />}
+        <PairPreviewPanel preview={pairPreviews[assignment.id]} /></div>}
       {!isInstructor && <StudentEvaluationPages assignmentId={assignment.id} initiallyOpen={index === 0} />}
       <ScoreWorkspace assignmentId={assignment.id} isInstructor={isInstructor} />
       {isInstructor && assignment.published_at && <InstructorEvaluation assignmentId={assignment.id} classroomId={classroomId} email={email} />}

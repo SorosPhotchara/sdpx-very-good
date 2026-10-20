@@ -13,9 +13,11 @@ export type AssignmentSetup = {
   title: string
   group_score: number
   individual_score: number
-  group_participation_max: number
-  individual_participation_max: number
   instructor_weight: number
+  // Omit to keep the assignment's current band (see §9.3 in the PRD).
+  score_floor?: number
+  score_ceiling?: number
+  completion_threshold?: number
   group_deadline: string | null
   individual_deadline: string | null
   group_criteria: CriterionInput[]
@@ -24,6 +26,19 @@ export type AssignmentSetup = {
 export type Assignment = { id: number; title: string; published_at: string | null }
 export type PairPreviewItem = { section: 'group' | 'individual'; criterion: string; left: string; right: string; evaluator: string }
 export type PairPreview = { pair_assignments: number; pairs: PairPreviewItem[] }
+export type FeasibilitySide = {
+  coverage: number; workload: number; pairs: number; comparisons: number
+  requested: number; reduced: boolean; feasible: boolean; reason: string
+}
+// PRD §8.2/§8.3: what a publish would actually achieve, and why it fell short.
+export type Feasibility = {
+  assignment_id: number; students: number; groups: number; target_coverage: number
+  group: FeasibilitySide & { criteria: number; comparisons_per_student: number; total_comparisons: number }
+  individual: {
+    criteria: number; total_comparisons: number
+    groups: (FeasibilitySide & { group_id: number; members: number; comparisons_per_student: number })[]
+  }
+}
 export type Criterion = { id: number; assignment_id: number; name: string; weight: number; is_group: boolean }
 export type Group = { id: number; name: string; classroom_id: number }
 export type Student = { id: number; email: string; display_name: string | null; group_name: string | null; group_id: number | null; classroom_id: number; activated_at: string | null }
@@ -37,9 +52,13 @@ export type EvaluationPage = {
   is_open: boolean; submitted_at: string | null; pairs: EvaluationPair[]
 }
 export type StudentScore = {
-  student_id: number; email: string; group_name: string | null
+  student_id: number; email: string; group_id: number | null; group_name: string | null
   group_work_score: number | null; individual_work_score: number | null
-  group_participation_score: number | null; individual_participation_score: number | null
+  // PRD §9.4: participation is a multiplier on the personal score, not a score
+  // component. final_score is null until every part of it has been scored.
+  assigned_comparisons: number; submitted_comparisons: number
+  participation_ratio: number | null; participation_multiplier: number
+  final_score: number | null
 }
 export type MyScores = StudentScore & { group_final: boolean; individual_final: boolean }
 export type AssignmentReport = {
@@ -51,7 +70,7 @@ export type AssignmentReport = {
     eligible_evaluators: number; target_evaluations: number; assigned_evaluators: number
     votes: number; instructor_votes: number; effective_votes: number
     left_points: number; right_points: number
-    missing_to_target: number; shortage_to_five: number
+    missing_to_target: number; shortage_to_target: number
   }[]
   criterion_scores: { criterion_id: number; criterion: string; section: string; item_id: number; weighted_score: number | null; effective_votes: number }[]
   group_final: boolean; individual_final: boolean
@@ -288,6 +307,11 @@ export async function updateAssignmentSetup(assignmentId: number, setup: Assignm
     body: JSON.stringify(setup),
   })
   return readJson<Assignment>(response)
+}
+
+export async function getAssignmentFeasibility(assignmentId: number): Promise<Feasibility> {
+  const response = await fetch(`${API_BASE}/assignments/${assignmentId}/feasibility`, { headers: authHeaders() })
+  return readJson<Feasibility>(response)
 }
 
 export async function previewAssignment(assignmentId: number): Promise<PairPreview> {

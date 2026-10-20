@@ -257,15 +257,21 @@ class ApiAccessTests(unittest.TestCase):
         self.assertTrue(all({
             "eligible_evaluators": 3, "target_evaluations": 3,
             "assigned_evaluators": 3, "votes": 0,
-            "missing_to_target": 3, "shortage_to_five": 2,
+            "missing_to_target": 3, "shortage_to_target": 2,
         }.items() <= row.items() for row in report["coverage"]))
         instructor_pair = next(row for row in report["coverage"] if {
             row["left_id"], row["right_id"]
         } == {groups[0]["id"], groups[1]["id"]})
         self.assertEqual(instructor_pair["instructor_votes"], 1)
         self.assertEqual(instructor_pair["effective_votes"], 2.0)
-        self.assertEqual(instructor_pair["left_points"], 1.0)
-        self.assertEqual(instructor_pair["right_points"], 1.0)
+        with Session(self.engine) as db:
+            flipped = db.get(models.Pair, pair_id).display_flipped
+        # Choice 3 is "shown-left slightly better" = 0.6/0.4 on the six-point
+        # scale (no tie, D1), scaled by instructor_weight 2. Coverage reports in
+        # canonical id order, so the randomised display order (FR-PAIR-08)
+        # decides which side carries the larger share.
+        self.assertEqual(instructor_pair["left_points"], 0.8 if flipped else 1.2)
+        self.assertEqual(instructor_pair["right_points"], 1.2 if flipped else 0.8)
         self.assertTrue(any(row["effective_votes"] > 0 for row in report["criterion_scores"]))
 
         self.sign_in("studentA0@example.edu")
@@ -289,14 +295,13 @@ class ApiAccessTests(unittest.TestCase):
             [],
         )
 
-    def test_assignment_total_maximum_matches_four_components(self) -> None:
+    def test_assignment_total_maximum_matches_the_work_sections(self) -> None:
         self.sign_in("teacher@example.edu", is_instructor=True)
         classroom_id = self.client.post("/classrooms/", json={"name": "Course"}).json()["id"]
         deadline = (datetime.now(UTC) + timedelta(days=7)).isoformat()
         setup = {
             "title": "Review", "group_score": 10, "individual_score": 4,
-            "group_participation_max": 2, "individual_participation_max": 1,
-            "total_score": 17, "group_deadline": deadline, "individual_deadline": deadline,
+            "total_score": 14, "group_deadline": deadline, "individual_deadline": deadline,
             "group_criteria": [{"name": "Quality", "weight": 100}],
             "individual_criteria": [{"name": "Contribution", "weight": 100}],
         }
@@ -304,7 +309,7 @@ class ApiAccessTests(unittest.TestCase):
         self.assertEqual(self.client.post(path, json={**setup, "total_score": 18}).status_code, 422)
         created = self.client.post(path, json=setup)
         self.assertEqual(created.status_code, 200)
-        self.assertEqual(created.json()["total_score"], 17)
+        self.assertEqual(created.json()["total_score"], 14)
         assignment_id = created.json()["id"]
-        self.assertEqual(self.client.get(f"/assignments/{assignment_id}/setup").json()["total_score"], 17)
-        self.assertEqual(self.client.get("/assignments/", params={"classroom_id": classroom_id}).json()[0]["total_score"], 17)
+        self.assertEqual(self.client.get(f"/assignments/{assignment_id}/setup").json()["total_score"], 14)
+        self.assertEqual(self.client.get("/assignments/", params={"classroom_id": classroom_id}).json()[0]["total_score"], 14)

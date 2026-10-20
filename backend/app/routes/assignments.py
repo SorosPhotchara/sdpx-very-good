@@ -7,7 +7,7 @@ from ..assignment_setup import create_assignment as create_complete_assignment, 
 from ..auth import Identity, current_identity
 from ..dependencies import get_db, instructor_emails, require_owner, utc_deadline, validate_page
 from ..instructor_evaluation import assign_pair, assign_student_pair, read_instructor_pairs, save_instructor_vote
-from ..publish import build_plan, publish
+from ..publish import build_plan, plan_feasibility, publish
 
 router = APIRouter(dependencies=[Depends(current_identity)])
 
@@ -57,9 +57,14 @@ def read_assignment_setup(
     return schemas.AssignmentSetup(
         title=assignment.title, group_score=assignment.group_score,
         individual_score=assignment.individual_score,
-        group_participation_max=assignment.group_participation_max or 0,
-        individual_participation_max=assignment.individual_participation_max or 0,
         instructor_weight=assignment.instructor_weight,
+        score_floor=assignment.score_floor,
+        score_ceiling=assignment.score_ceiling,
+        completion_threshold=assignment.completion_threshold,
+        target_coverage=assignment.target_coverage,
+        group_max_workload=assignment.group_max_workload,
+        individual_max_workload=assignment.individual_max_workload,
+        min_comparisons=assignment.min_comparisons,
         group_deadline=utc_deadline(assignment.group_deadline),
         individual_deadline=utc_deadline(assignment.individual_deadline),
         group_criteria=[schemas.CriterionInput(name=item.name, weight=item.weight)
@@ -93,6 +98,27 @@ def edit_assignment_setup(
         return update_complete_assignment(db, assignment, payload)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
+
+
+@router.get("/assignments/{assignment_id}/feasibility")
+def read_assignment_feasibility(
+    assignment_id: int,
+    identity: Identity = Depends(current_identity),
+    db: Session = Depends(get_db),
+) -> dict:
+    """FR-PAIR-04/05: the coverage and workload a publish would use, in numbers.
+
+    Cheaper than /preview, which allocates every pair, and it is the call that
+    tells an instructor a target was reduced before they commit to it.
+    """
+    assignment = db.get(models.Assignment, assignment_id)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    require_owner(assignment.classroom_id, identity, db)
+    try:
+        return plan_feasibility(db, assignment_id)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @router.get("/assignments/{assignment_id}/preview")

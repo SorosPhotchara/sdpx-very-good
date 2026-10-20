@@ -9,8 +9,7 @@ import { useEvaluationDraft } from './useEvaluationDraft'
 import { formatCountdown, useCountdown } from './useCountdown'
 import { ToastNotice, useNotice } from './components/ui/toast'
 import { DisclosureSummary } from './components/ui/disclosure-summary'
-
-const choices = ['Strongly left', 'Slightly left', 'Equal', 'Slightly right', 'Strongly right']
+import { choices } from './choices'
 
 const sections = ['group', 'individual'] as const
 const sectionTitle = (section: 'group' | 'individual') => section === 'group' ? 'Group evaluation' : 'Individual evaluation'
@@ -128,8 +127,8 @@ export function EvaluationWorkspace({ assignmentId, section }: { assignmentId: n
       {draft.failed && <div role="alert" className="mt-2">{language === 'th' ? 'คำตอบที่เลือกยังบันทึกไม่สำเร็จ กรุณาลองอีกครั้งก่อนส่ง' : 'Your choices have not been saved. Retry before submitting.'} <Button type="button" variant="outline" onClick={draft.retry}>{t('Retry')}</Button></div>}
       {page.submitted_at && <p className="text-slate-600">{t('Last submitted')}: {date(page.submitted_at)}</p>}
       {page.is_open && unanswered > 0 && <p className="evaluation-incomplete" data-testid="unanswered-notice">{language === 'th'
-        ? `ยังมี ${unanswered} คู่ที่ยังไม่ได้ประเมิน คู่ที่ไม่ได้ตอบจะไม่ถูกนับและมีผลต่อคะแนนการมีส่วนร่วม`
-        : `${unanswered} pair${unanswered === 1 ? '' : 's'} still unevaluated. Unanswered pairs are not counted and reduce your participation score.`}</p>}
+        ? `ยังมี ${unanswered} คู่ที่ยังไม่ได้ประเมิน คู่ที่ไม่ได้ตอบจะไม่ถูกนับ และทำให้ตัวคูณการมีส่วนร่วมของคุณลดลง`
+        : `${unanswered} pair${unanswered === 1 ? '' : 's'} still unevaluated. Unanswered pairs are not counted and lower your participation multiplier.`}</p>}
       {page.pairs.length === 0 && <p className="text-slate-500">{t('No pairs assigned for this section.')}</p>}
       {section === 'individual' && activeCriterionPairs.length > 0 && <div ref={criterionNavigator} className="mt-3 border-b border-border pb-3" data-testid="individual-criterion-navigator">
         <div className="flex items-center justify-between gap-3">
@@ -148,7 +147,7 @@ export function EvaluationWorkspace({ assignmentId, section }: { assignmentId: n
           {section === 'individual' && <div className="mb-3 text-xs font-medium text-muted-foreground">
             {language === 'th' ? `คู่ที่ ${pairIndex + 1}/${activeCriterionPairs.length}` : `Pair ${pairIndex + 1}/${activeCriterionPairs.length}`}
           </div>}
-          {/* One row per the PRD mock: left item, the five levels, right item. */}
+          {/* One row per the PRD mock: left item, the six levels, right item. */}
           <div className="pair-candidates" data-testid="pair-candidates">
             <span className="pair-side">{pair.left}</span>
             <div className="choice-scale">

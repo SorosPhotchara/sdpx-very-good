@@ -7,6 +7,8 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from . import models
+from .models import shown_subjects as _shown
+from .scoring import CHOICES
 from .timezone import as_utc
 from .observability import log_event
 
@@ -76,8 +78,10 @@ def read_page(db: Session, assignment_id: int, section: str, email: str) -> dict
             {
                 "id": pair.id,
                 "criterion": criteria[pair.criteria_id],
-                "left": labels[pair.left_group_id if section == "group" else pair.left_id],
-                "right": labels[pair.right_group_id if section == "group" else pair.right_id],
+                # FR-PAIR-08: serve the randomised display order, and record the
+                # choice against it. The client renders these as given.
+                "left": labels[_shown(pair, section == "group")[0]],
+                "right": labels[_shown(pair, section == "group")[1]],
                 "draft_choice": drafts.get(pair.id),
                 "submitted_choice": submitted.get(pair.id),
             }
@@ -94,7 +98,7 @@ def save_draft(db: Session, assignment_id: int, section: str, email: str, change
     if len({pair_id for pair_id, _ in changes}) != len(changes):
         raise HTTPException(422, "Duplicate pair in draft")
     for pair_id, choice in changes:
-        if pair_id not in allowed or (choice is not None and choice not in range(1, 6)):
+        if pair_id not in allowed or (choice is not None and choice not in range(1, CHOICES + 1)):
             raise HTTPException(422, "Invalid pair or choice")
     try:
         for pair_id, choice in changes:

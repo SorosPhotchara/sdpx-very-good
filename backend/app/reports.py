@@ -1,4 +1,4 @@
-"""Compute current work and participation scores from submitted snapshots."""
+"""Compute work scores and the participation multiplier from submitted snapshots."""
 
 from datetime import UTC, datetime
 from itertools import combinations
@@ -6,7 +6,9 @@ from itertools import combinations
 from sqlalchemy.orm import Session, selectinload
 
 from . import models
-from .scoring import POINTS, PairVote, score_items
+from .feasibility import solve_group_feasibility, solve_individual_feasibility
+from .models import shown_subjects as _shown
+from .scoring import POINTS, PairVote, participation_multiplier, score_items
 from .timezone import as_utc
 
 
@@ -27,6 +29,11 @@ def assignment_report(db: Session, assignment: models.Assignment) -> dict:
         if student.group_id in group_members:
             group_members[student.group_id].add(student.id)
     active_group_ids = sorted(group_id for group_id, members in group_members.items() if members)
+    # The achievable coverage, not a constant: reporting a target the classroom
+    # could never reach would make every pair look short (FR-PAIR-05).
+    group_plan = solve_group_feasibility(
+        [len(group_members[group_id]) for group_id in active_group_ids],
+        assignment.target_coverage, assignment.group_max_workload)
 
     # Old publications may contain repeated assignments. Only one active answer
     # per evaluator and unordered subject pair may affect a report.
@@ -76,31 +83,35 @@ def assignment_report(db: Session, assignment: models.Assignment) -> dict:
         for pair in pairs:
             if pair.criteria_id != criterion.id or pair.pair_type != section:
                 continue
-            left = pair.left_group_id if criterion.is_group else pair.left_id
-            right = pair.right_group_id if criterion.is_group else pair.right_id
+            left, right = _shown(pair, criterion.is_group)
             if left is None or right is None:
                 continue
             eligible = eligible_by_pair.get(tuple(sorted((left, right))))
             if eligible is not None and (pair.assigned_to_student_id is None
                                          or pair.assigned_to_student_id in eligible):
                 criterion_pairs.append(pair)
-        votes = [PairVote(
-            left_id=pair.left_group_id if criterion.is_group else pair.left_id,
-            right_id=pair.right_group_id if criterion.is_group else pair.right_id,
-            choice=submitted[pair.id],
-            weight=assignment.instructor_weight if pair.assigned_to_instructor_email else 1.0,
-        ) for pair in criterion_pairs if pair.id in submitted]
+        votes = []
+        for pair in criterion_pairs:
+            if pair.id not in submitted:
+                continue
+            shown_left, shown_right = _shown(pair, criterion.is_group)
+            votes.append(PairVote(
+                left_id=shown_left, right_id=shown_right,
+                choice=submitted[pair.id],
+                weight=assignment.instructor_weight if pair.assigned_to_instructor_email else 1.0,
+            ))
         scores = score_items(
             item_ids, votes,
             assignment.group_score if criterion.is_group else assignment.individual_score,
             criterion.weight / 100, final,
+            floor=assignment.score_floor, ceiling=assignment.score_ceiling,
         )
         target = group_scores if criterion.is_group else individual_scores
         for item_id, result in scores.items():
             criterion_scores.append({
                 "criterion_id": criterion.id, "criterion": criterion.name, "section": section,
                 "item_id": item_id, "average_points": result.average_points,
-                "relative_score": result.relative_score, "weighted_score": result.weighted_score,
+                "score_ratio": result.score_ratio, "weighted_score": result.weighted_score,
                 "effective_votes": result.effective_votes,
             })
             if result.weighted_score is not None:
@@ -112,8 +123,7 @@ def assignment_report(db: Session, assignment: models.Assignment) -> dict:
             key: [0, 0.0, 0.0, 0.0] for key in eligible_by_pair
         }
         for pair in criterion_pairs:
-            left = pair.left_group_id if criterion.is_group else pair.left_id
-            right = pair.right_group_id if criterion.is_group else pair.right_id
+            left, right = _shown(pair, criterion.is_group)
             key = tuple(sorted((left, right)))
             if pair.assigned_to_student_id is not None:
                 assigned_by_pair[key].add(pair.assigned_to_student_id)
@@ -132,7 +142,15 @@ def assignment_report(db: Session, assignment: models.Assignment) -> dict:
                     result[0] += 1
         labels = group_labels if criterion.is_group else student_labels
         for (left, right), eligible in sorted(eligible_by_pair.items()):
-            target_evaluations = min(5, len(eligible))
+            if criterion.is_group:
+                target_evaluations = min(group_plan.coverage, len(eligible))
+            else:
+                # An individual pair's eligible set is its group minus the two
+                # subjects, so the group size follows from it (§8.3).
+                target_evaluations = min(
+                    solve_individual_feasibility(
+                        len(eligible) + 2, assignment.individual_max_workload).coverage,
+                    len(eligible))
             count = len(votes_by_pair[(left, right)])
             instructor_count, effective_count, left_points, right_points = pair_results[(left, right)]
             coverage.append({"section": section, "criterion_id": criterion.id, "criterion": criterion.name, "left_id": left,
@@ -141,7 +159,7 @@ def assignment_report(db: Session, assignment: models.Assignment) -> dict:
                              "target_evaluations": target_evaluations,
                              "assigned_evaluators": len(assigned_by_pair[(left, right)]),
                              "votes": count, "missing_to_target": max(0, target_evaluations - count),
-                             "shortage_to_five": 5 - target_evaluations,
+                             "shortage_to_target": max(0, assignment.target_coverage - target_evaluations),
                              "instructor_votes": int(instructor_count), "effective_votes": effective_count,
                              "left_points": left_points, "right_points": right_points})
 
@@ -154,24 +172,42 @@ def assignment_report(db: Session, assignment: models.Assignment) -> dict:
         assigned[key] = assigned.get(key, 0) + 1
         answered[key] = answered.get(key, 0) + int(pair.id in submitted)
 
+    has_group_criteria = any(criterion.is_group for criterion in criteria)
+    has_individual_criteria = any(not criterion.is_group for criterion in criteria)
+
     rows = []
     for student in students:
         group = next((item for item in groups if item.id == student.group_id), None)
         member_count = sum(member.group_id == student.group_id for member in students)
-        participation = {}
-        for section, maximum in (("group", assignment.group_participation_max),
-                                 ("individual", assignment.individual_participation_max)):
-            eligible = section == "group" or member_count >= 3
-            total = assigned.get((student.id, section), 0)
-            done = answered.get((student.id, section), 0)
-            participation[section] = None if not eligible else maximum * done / total if total else 0.0
+        scores_individually = member_count >= 3 and has_individual_criteria
+
+        # §9.4: one ratio over both sections, then a multiplier on the personal
+        # score. A group of fewer than three has no individual work to assign, so
+        # its members are neither credited nor penalised for that section.
+        assigned_total = sum(assigned.get((student.id, section), 0)
+                             for section in ("group", "individual"))
+        answered_total = sum(answered.get((student.id, section), 0)
+                             for section in ("group", "individual"))
+        multiplier = participation_multiplier(answered_total, assigned_total,
+                                              assignment.completion_threshold)
+        group_work = group_scores.get(student.group_id)
+        individual_work = individual_scores[student.id] if scores_individually else None
+        earned = ([group_work] if has_group_criteria else []) + \
+                 ([individual_work] if scores_individually else [])
+        # An absent component means "not scored yet", which is not the same as
+        # zero, so the personal total stays absent until every part of it exists.
+        final_score = (None if any(part is None for part in earned)
+                       else sum(earned) * multiplier)
         rows.append({
             "student_id": student.id, "email": student.email,
             "group_id": student.group_id, "group_name": group.name if group else None,
-            "group_work_score": group_scores.get(student.group_id),
-            "individual_work_score": individual_scores[student.id] if member_count >= 3 else None,
-            "group_participation_score": participation["group"],
-            "individual_participation_score": participation["individual"],
+            "group_work_score": group_work,
+            "individual_work_score": individual_work,
+            "assigned_comparisons": assigned_total,
+            "submitted_comparisons": answered_total,
+            "participation_ratio": (answered_total / assigned_total) if assigned_total else None,
+            "participation_multiplier": multiplier,
+            "final_score": final_score,
         })
     return {"assignment_id": assignment.id, "title": assignment.title, "students": rows,
             "groups": [{"group_id": group.id, "name": group.name, "work_score": group_scores[group.id]} for group in groups],
@@ -197,8 +233,8 @@ def raw_pair_responses(db: Session, assignment: models.Assignment) -> list[dict]
     rows = []
     for pair in pairs:
         is_group = pair.pair_type == "group"
-        left_id = pair.left_group_id if is_group else pair.left_id
-        right_id = pair.right_group_id if is_group else pair.right_id
+        # Display order, so the reported choice reads against the right subject.
+        left_id, right_id = _shown(pair, is_group)
         labels = groups if is_group else students
         answer = answers.get(pair.id)
         rows.append({
